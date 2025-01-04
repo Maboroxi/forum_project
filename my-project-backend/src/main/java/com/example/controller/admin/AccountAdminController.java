@@ -10,11 +10,15 @@ import com.example.entity.vo.response.AccountVO;
 import com.example.service.AccountDetailsService;
 import com.example.service.AccountPrivacyService;
 import com.example.service.AccountService;
+import com.example.utils.Const;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/api/admin/user")
@@ -28,6 +32,12 @@ public class AccountAdminController {
 
     @Resource
     AccountPrivacyService privacyService;
+
+    @Resource
+    StringRedisTemplate template;
+
+    @Value("${spring.security.jwt.expire}")
+    private int expire;
 
     @GetMapping("/list")
     public RestBean<JSONObject> accountList(int page, int size) {
@@ -55,6 +65,7 @@ public class AccountAdminController {
         int id = object.getInteger("id");
         Account account = service.findAccountById(id);
         Account save = object.toJavaObject(Account.class);
+        handleBanned(account, save);
         BeanUtils.copyProperties(save, account, "password", "registerTime");
         service.saveOrUpdate(account);
         AccountDetails details = detailsService.findAccountDetailsById(id);
@@ -66,5 +77,14 @@ public class AccountAdminController {
         BeanUtils.copyProperties(savePrivacy, privacy);
         privacyService.saveOrUpdate(savePrivacy);
         return RestBean.success();
+    }
+
+    private void handleBanned(Account old, Account current) {
+        String key = Const.BANNED_BLOCK + old.getId();
+        if(!old.isBanned() && current.isBanned()) {
+            template.opsForValue().set(key, "true", expire, TimeUnit.HOURS);
+        } else if(old.isBanned() && !current.isBanned()) {
+            template.delete(key);
+        }
     }
 }

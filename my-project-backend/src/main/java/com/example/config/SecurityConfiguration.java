@@ -105,6 +105,10 @@ public class SecurityConfiguration {
         } else if(exceptionOrAuthentication instanceof Authentication authentication){
             User user = (User) authentication.getPrincipal();
             Account account = service.findAccountByNameOrEmail(user.getUsername());
+            if(account.isBanned()) {
+                writer.write(RestBean.forbidden("登录失败，此账户已被封禁").asJsonString());
+                return;
+            }
             String jwt = utils.createJwt(user, account.getUsername(), account.getId());
             if(jwt == null) {
                 writer.write(RestBean.forbidden("登录验证频繁，请稍后再试").asJsonString());
