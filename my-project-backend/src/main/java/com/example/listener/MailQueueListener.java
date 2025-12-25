@@ -1,6 +1,9 @@
 package com.example.listener;
 
+import com.example.entity.dto.EmailRecord;
+import com.example.mapper.EmailRecordMapper;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitHandler;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,11 +11,10 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
-
 /**
  * 用于处理邮件发送的消息队列监听器
  */
+@Slf4j
 @Component
 @RabbitListener(queues = "mail")
 public class MailQueueListener {
@@ -20,48 +22,39 @@ public class MailQueueListener {
     @Resource
     JavaMailSender sender;
 
+    @Resource
+    EmailRecordMapper recordMapper;
+
     @Value("${spring.mail.username}")
     String username;
 
     /**
      * 处理邮件发送
-     * @param data 邮件信息
+     * @param email 邮件信息
      */
     @RabbitHandler
-    public void sendMailMessage(Map<String, Object> data) {
-        String email = data.get("email").toString();
-        Integer code = (Integer) data.get("code");
-        SimpleMailMessage message = switch (data.get("type").toString()) {
-            case "register" ->
-                    createMessage("欢迎注册我们的网站",
-                            "您的邮件注册验证码为: "+code+"，有效时间3分钟，为了保障您的账户安全，请勿向他人泄露验证码信息。",
-                            email);
-            case "reset" ->
-                    createMessage("您的密码重置邮件",
-                            "你好，您正在执行重置密码操作，验证码: "+code+"，有效时间3分钟，如非本人操作，请无视。",
-                            email);
-            case "modify" ->
-                    createMessage("您的邮件修改验证邮件",
-                            "您好，您正在绑定新的电子邮件地址，验证码: "+code+"，有效时间3分钟，如非本人操作，请无视。",
-                            email);
-            default -> null;
-        };
-        if(message == null) return;
-        sender.send(message);
+    public void sendMailMessage(EmailRecord email) {
+        try {
+            sender.send(createMessage(email));
+            email.setStatus(1);
+            recordMapper.updateById(email);
+            log.info("邮件发送成功，邮件记录ID：{}，邮件接收人: {}", email.getId(), email.getEmail());
+        } catch (Exception e) {
+            log.error("邮件发送失败，邮件记录ID：{}，邮件接收人: {}, 错误信息: {}", email.getId(), email.getEmail(), e.getMessage());
+            throw e;
+        }
     }
 
     /**
      * 快速封装简单邮件消息实体
-     * @param title 标题
-     * @param content 内容
-     * @param email 收件人
+     * @param email 邮件记录
      * @return 邮件实体
      */
-    private SimpleMailMessage createMessage(String title, String content, String email){
+    private SimpleMailMessage createMessage(EmailRecord email){
         SimpleMailMessage message = new SimpleMailMessage();
-        message.setSubject(title);
-        message.setText(content);
-        message.setTo(email);
+        message.setSubject(email.getTitle());
+        message.setText(email.getContent());
+        message.setTo(email.getEmail());
         message.setFrom(username);
         return message;
     }
