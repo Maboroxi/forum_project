@@ -6,7 +6,7 @@ import {
     DataLine,
     Document,
     Files,
-    Location,
+    Location, Message,
     Monitor, Notification, Position, School,
     Umbrella,
     User
@@ -20,6 +20,7 @@ const adminMenu = [
     {
         title: '校园论坛管理', icon: Location, sub: [
             { title: '用户管理', icon: User, index: '/admin/user' },
+            { title: '邮件管理', icon: Message, index: '/admin/email' },
             { title: '帖子广场管理', icon: ChatDotSquare, index: '/admin/forum' },
             { title: '失物招领管理', icon: Bell },
             { title: '校园活动管理', icon: Notification },

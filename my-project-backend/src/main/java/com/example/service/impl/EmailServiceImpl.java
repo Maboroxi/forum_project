@@ -1,5 +1,6 @@
 package com.example.service.impl;
 
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.example.entity.dto.EmailRecord;
 import com.example.mapper.EmailRecordMapper;
 import com.example.service.EmailService;
@@ -7,6 +8,8 @@ import com.example.utils.Const;
 import jakarta.annotation.Resource;
 import org.springframework.amqp.core.AmqpTemplate;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class EmailServiceImpl implements EmailService {
@@ -30,5 +33,10 @@ public class EmailServiceImpl implements EmailService {
         };
         recordMapper.insert(emailRecord);
         rabbitTemplate.convertAndSend(Const.MQ_MAIL, emailRecord);
+    }
+
+    @Override
+    public List<EmailRecord> listEmailRecord() {
+        return recordMapper.selectList(Wrappers.emptyWrapper());
     }
 }
