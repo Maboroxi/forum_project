@@ -52,3 +52,6 @@ spring:
   weather:
     api-host: 'kv487n5dxd.re.qweatherapi.com'
     key: 8d3b57acbb0745adbdf56f8052fa8779
+  ai:
+    deepseek:
+      api-key: 'sk-daa97a763da84b899c8d23b70a61d728'
