@@ -2,13 +2,11 @@
 import {inject, reactive, ref} from "vue";
 import {
     Bell,
-    ChatDotSquare, Check, CoffeeCup, Collection, DataLine,
-    Document, Files,
-    Location, Lock, Monitor,
-    Notification, Operation,
-    Position,
-    School, Search,
-    Umbrella, User
+    ChatDotSquare, Check, CoffeeCup,
+    Location, Lock,
+    Operation,
+    Search,
+    User
 } from "@element-plus/icons-vue";
 import LightCard from "@/components/LightCard.vue";
 import UserInfo from "@/components/UserInfo.vue";
@@ -24,19 +22,7 @@ const store = useStore()
 const userMenu = [
     {
         title: '校园论坛', icon: Location, sub: [
-            { title: '帖子广场', icon: ChatDotSquare, index: '/index' },
-            { title: '失物招领', icon: Bell },
-            { title: '校园活动', icon: Notification },
-            { title: '表白墙', icon: Umbrella },
-            { title: '海文考研', icon: School }
-        ]
-    }, {
-        title: '探索与发现', icon: Position, sub: [
-            { title: '成绩查询', icon: Document },
-            { title: '班级课程表', icon: Files },
-            { title: '教务通知', icon: Monitor },
-            { title: '在线图书馆', icon: Collection },
-            { title: '预约教室', icon: DataLine }
+            { title: '帖子广场', icon: ChatDotSquare, index: '/index' }
         ]
     }, {
         title: '个人设置', icon: Operation, sub: [
@@ -171,7 +157,7 @@ apiForumTypes(data => {
                         <el-menu
                                 router
                                 :default-active="$route.path"
-                                :default-openeds="['1', '2', '3']"
+                                :default-openeds="['1', '2']"
                                 style="min-height: calc(100vh - 55px)">
                             <el-sub-menu :index="(index + 1).toString()"
                                          v-for="(menu, index) in userMenu">
