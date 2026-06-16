@@ -1,5 +1,5 @@
 <script setup>
-import {Check, Document} from "@element-plus/icons-vue";
+import {Check, Document, Files} from "@element-plus/icons-vue";
 import {computed, reactive, ref} from "vue";
 import {Delta, Quill, QuillEditor} from "@vueup/vue-quill";
 import ImageResize from "quill-image-resize-vue";
@@ -11,6 +11,7 @@ import {ElMessage} from "element-plus";
 import ColorDot from "@/components/ColorDot.vue";
 import {useStore} from "@/store";
 import {apiForumTopicCreate} from "@/net/api/forum";
+import {deleteTopicDraft, saveTopicDraft} from "@/utils/topicDraft";
 
 const store = useStore()
 
@@ -27,6 +28,14 @@ const props = defineProps({
     defaultType: {
         default: null,
         type: Number
+    },
+    draftId: {
+        default: null,
+        type: String
+    },
+    draftable: {
+        default: true,
+        type: Boolean
     },
     submitButton: {
         default: '立即发表主题',
@@ -47,21 +56,27 @@ const props = defineProps({
     }
 })
 
-const emit = defineEmits(['close', 'success'])
+const emit = defineEmits(['close', 'success', 'draft-save'])
 
 const refEditor = ref()
+const currentDraftId = ref(null)
 const editor = reactive({
     type: null,
     title: '',
     text: '',
-    loading: false
+    loading: false,
+    uploading: false
 })
 
 function initEditor() {
-    if(props.defaultText)
-        editor.text = new Delta(JSON.parse(props.defaultText))
-    else
+    currentDraftId.value = props.draftId
+    if(props.defaultText) {
+        const content = typeof props.defaultText === 'string' ? JSON.parse(props.defaultText) : props.defaultText
+        editor.text = new Delta(content)
+    } else {
         refEditor.value.setContents('', 'user')
+        editor.text = ''
+    }
     editor.title = props.defaultTitle
     editor.type = findTypeById(props.defaultType)
 }
@@ -75,12 +90,25 @@ function deltaToText(delta) {
 }
 
 const contentLength = computed(() => deltaToText(editor.text).length)
+const editorTitle = computed(() => props.draftable && currentDraftId.value ? '编辑帖子草稿' : '发表新的帖子')
 
 function findTypeById(id){
     for (let type of store.forum.types) {
         if(type.id === id)
             return type
     }
+}
+
+function saveDraft() {
+    const draft = saveTopicDraft(store.user.id, {
+        id: currentDraftId.value,
+        title: editor.title,
+        type: editor.type?.id,
+        content: editor.text
+    })
+    currentDraftId.value = draft.id
+    ElMessage.success('草稿保存成功！')
+    emit('draft-save', draft)
 }
 
 function submitTopic() {
@@ -97,7 +125,11 @@ function submitTopic() {
         ElMessage.warning('请选择一个合适的帖子类型！')
         return
     }
-    props.submit(editor, () => emit('success'))
+    props.submit(editor, () => {
+        if(props.draftable && currentDraftId.value)
+            deleteTopicDraft(store.user.id, currentDraftId.value)
+        emit('success', currentDraftId.value)
+    })
 }
 
 Quill.register('modules/imageResize', ImageResize)
@@ -163,7 +195,7 @@ const editorOption = {
              @close="emit('close')">
     <template #header>
       <div>
-        <div style="font-weight: bold">发表新的帖子</div>
+        <div style="font-weight: bold">{{editorTitle}}</div>
         <div style="font-size: 13px">发表内容之前，请遵守相关法律法规，不要出现骂人等爆粗口的不文明行为。</div>
       </div>
     </template>
@@ -199,6 +231,7 @@ const editorOption = {
         当前字数 {{contentLength}}（最大支持20000字）
       </div>
       <div>
+        <el-button v-if="draftable" :icon="Files" @click="saveDraft" plain>保存草稿</el-button>
         <el-button type="success" :icon="Check" @click="submitTopic" plain>{{submitButton}}</el-button>
       </div>
     </div>

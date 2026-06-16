@@ -5,16 +5,18 @@ import {
     Clock,
     CollectionTag,
     Compass,
+    Delete,
     Document,
     Edit,
     EditPen,
+    Files,
     Link,
     Picture,
     Microphone, CircleCheck, Star, FolderOpened, ArrowRightBold, Lock
 } from "@element-plus/icons-vue";
 import Weather from "@/components/Weather.vue";
 import {computed, onMounted, reactive, ref, watch} from "vue";
-import {ElMessage} from "element-plus";
+import {ElMessage, ElMessageBox} from "element-plus";
 import TopicEditor from "@/components/TopicEditor.vue";
 import {useStore} from "@/store";
 import ColorDot from "@/components/ColorDot.vue";
@@ -23,6 +25,7 @@ import TopicTag from "@/components/TopicTag.vue";
 import TopicCollectList from "@/components/TopicCollectList.vue";
 import {apiForumTopicList, apiForumTopTopics, apiForumWeather} from "@/net/api/forum";
 import {apiAnnouncementLatest} from "@/net/api/announcement";
+import {deleteTopicDraft, listTopicDrafts, topicDraftSummary} from "@/utils/topicDraft";
 
 const store = useStore()
 
@@ -42,6 +45,16 @@ const topics = reactive({
 })
 const announcements = ref([])
 const collects = ref(false)
+const drafts = reactive({
+    show: false,
+    list: []
+})
+const draftEditor = reactive({
+    id: null,
+    title: '',
+    type: null,
+    content: ''
+})
 
 watch(() => topics.type, () => resetList(), {immediate: true})
 
@@ -64,6 +77,8 @@ function updateList(){
 
 function onTopicCreate() {
     editor.value = false
+    clearDraftEditor()
+    reloadDrafts()
     resetList()
 }
 
@@ -72,6 +87,55 @@ function resetList() {
     topics.end = false
     topics.list = []
     updateList()
+}
+
+function clearDraftEditor() {
+    draftEditor.id = null
+    draftEditor.title = ''
+    draftEditor.type = null
+    draftEditor.content = ''
+}
+
+function openTopicEditor() {
+    clearDraftEditor()
+    editor.value = true
+}
+
+function reloadDrafts() {
+    drafts.list = listTopicDrafts(store.user.id)
+}
+
+function openDraft(draft) {
+    draftEditor.id = draft.id
+    draftEditor.title = draft.title || ''
+    draftEditor.type = draft.type || null
+    draftEditor.content = draft.content ? JSON.stringify(draft.content) : ''
+    drafts.show = false
+    editor.value = true
+}
+
+function onDraftSave(draft) {
+    draftEditor.id = draft.id
+    draftEditor.title = draft.title
+    draftEditor.type = draft.type
+    draftEditor.content = draft.content ? JSON.stringify(draft.content) : ''
+    reloadDrafts()
+}
+
+function removeDraft(draft) {
+    ElMessageBox.confirm('删除后无法恢复，确定删除这条草稿吗？', '删除草稿', {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+    }).then(() => {
+        deleteTopicDraft(store.user.id, draft.id)
+        reloadDrafts()
+        ElMessage.success('草稿已删除')
+    }).catch(() => {})
+}
+
+function formatDraftTime(time) {
+    return new Date(time).toLocaleString()
 }
 
 navigator.geolocation.getCurrentPosition(position => {
@@ -96,6 +160,7 @@ navigator.geolocation.getCurrentPosition(position => {
 onMounted(() => {
     apiForumTopTopics(data => topics.top = data)
     apiAnnouncementLatest(3, data => announcements.value = data)
+    reloadDrafts()
 })
 </script>
 
@@ -103,15 +168,21 @@ onMounted(() => {
     <div style="display: flex;margin: 20px auto;gap: 20px;max-width: 900px;padding: 0 20px">
         <div style="flex: 1">
             <light-card>
-                <div class="create-topic" @click="editor = true">
+                <div class="create-topic" @click="openTopicEditor">
                     <el-icon><EditPen/></el-icon> 点击发表主题...
                 </div>
-                <div style="margin-top: 10px;display: flex;gap: 13px;font-size: 18px;color: grey">
-                    <el-icon><Edit /></el-icon>
-                    <el-icon><Document /></el-icon>
-                    <el-icon><Compass /></el-icon>
-                    <el-icon><Picture /></el-icon>
-                    <el-icon><Microphone /></el-icon>
+                <div style="margin-top: 10px;display: flex;justify-content: space-between;align-items: center">
+                    <div style="display: flex;gap: 13px;font-size: 18px;color: grey">
+                        <el-icon><Edit /></el-icon>
+                        <el-icon><Document /></el-icon>
+                        <el-icon><Compass /></el-icon>
+                        <el-icon><Picture /></el-icon>
+                        <el-icon><Microphone /></el-icon>
+                    </div>
+                    <el-button :icon="Files" size="small" @click="drafts.show = true;reloadDrafts()" plain>
+                        草稿箱
+                        <span v-if="drafts.list.length">({{drafts.list.length}})</span>
+                    </el-button>
                 </div>
             </light-card>
             <light-card style="margin-top: 10px;display: flex;flex-direction: column;gap: 10px">
@@ -236,8 +307,39 @@ onMounted(() => {
                 </div>
             </div>
         </div>
-        <topic-editor :show="editor" @success="onTopicCreate" @close="editor = false"/>
+        <topic-editor :show="editor" :draft-id="draftEditor.id"
+                      :default-title="draftEditor.title"
+                      :default-type="draftEditor.type"
+                      :default-text="draftEditor.content"
+                      @success="onTopicCreate"
+                      @draft-save="onDraftSave"
+                      @close="editor = false"/>
         <topic-collect-list :show="collects" @close="collects = false"/>
+        <el-drawer v-model="drafts.show" title="帖子草稿箱" direction="rtl" size="420px">
+            <el-empty v-if="!drafts.list.length" description="暂无草稿"/>
+            <div v-else class="draft-list">
+                <div class="draft-item" v-for="item in drafts.list" :key="item.id">
+                    <div class="draft-item-header">
+                        <div class="draft-title">{{item.title || '未命名草稿'}}</div>
+                        <el-tag v-if="item.type" size="small" type="info">
+                            {{store.findTypeById(item.type)?.name || '未知分类'}}
+                        </el-tag>
+                    </div>
+                    <div class="draft-summary">{{topicDraftSummary(item.content) || '暂无正文内容'}}</div>
+                    <div class="draft-footer">
+                        <span>{{formatDraftTime(item.updateTime)}}</span>
+                        <div>
+                            <el-button :icon="EditPen" size="small" type="primary" @click="openDraft(item)" plain>
+                                继续编辑
+                            </el-button>
+                            <el-button :icon="Delete" size="small" type="danger" @click="removeDraft(item)" plain>
+                                删除
+                            </el-button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </el-drawer>
     </div>
 </template>
 
@@ -376,6 +478,52 @@ onMounted(() => {
 .friend-link {
     border-radius: 5px;
     overflow: hidden;
+}
+
+.draft-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.draft-item {
+    border: solid 1px var(--el-border-color);
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.draft-item-header {
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+}
+
+.draft-title {
+    font-size: 14px;
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.draft-summary {
+    color: grey;
+    display: -webkit-box;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-top: 8px;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.draft-footer {
+    align-items: center;
+    color: grey;
+    display: flex;
+    font-size: 12px;
+    justify-content: space-between;
+    margin-top: 10px;
 }
 
 .create-topic {
