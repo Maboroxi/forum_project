@@ -45,10 +45,16 @@ public class FlowLimitingFilter extends HttpFilter {
     @Override
     protected void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws IOException, ServletException {
         String address = request.getRemoteAddr();
-        if (!"OPTIONS".equals(request.getMethod()) && !tryCount(address))
-            this.writeBlockMessage(response);
-        else
-            chain.doFilter(request, response);
+        String uri = request.getRequestURI();
+        if (!"OPTIONS".equals(request.getMethod())) {
+            boolean allowed = tryCount(address, uri);
+            if (!allowed) {
+                log.warn("⚠️ 限流拦截 [{}] {} | IP={} | limit={}/{}/s block={}s", request.getMethod(), uri, address, limit, period, block);
+                this.writeBlockMessage(response);
+                return;
+            }
+        }
+        chain.doFilter(request, response);
     }
 
     /**
@@ -56,12 +62,19 @@ public class FlowLimitingFilter extends HttpFilter {
      * @param address 请求IP地址
      * @return 是否操作成功
      */
-    private boolean tryCount(String address) {
+    private boolean tryCount(String address, String uri) {
         synchronized (address.intern()) {
-            if(Boolean.TRUE.equals(template.hasKey(Const.FLOW_LIMIT_BLOCK + address)))
+            if (Boolean.TRUE.equals(template.hasKey(Const.FLOW_LIMIT_BLOCK + address))) {
+                log.info("🔴 已被封禁 IP={} | 命中URL={}", address, uri);
                 return false;
+            }
             String counterKey = Const.FLOW_LIMIT_COUNTER + address;
             String blockKey = Const.FLOW_LIMIT_BLOCK + address;
+
+            String countStr = template.opsForValue().get(counterKey);
+            int currentCount = countStr != null ? Integer.parseInt(countStr) : 0;
+            log.debug("🔵 请求计数 [{}] IP={} | 当前={}/{} | URL={}", currentCount + 1, address, currentCount, limit, uri);
+
             return utils.limitPeriodCheck(counterKey, blockKey, block, limit, period);
         }
     }

@@ -55,6 +55,16 @@ const router = createRouter({
                     path: 'privacy-setting',
                     name: 'privacy-setting',
                     component: () => import('@/views/settings/PrivacySetting.vue')
+                }, {
+                    path: 'ai-agent',
+                    name: 'ai-agent',
+                    component: () => import('@/views/ai/AiAgent.vue'),
+                    meta: { requiresAuth: true }
+                }, {
+                    path: 'ai-customer-service',
+                    name: 'ai-customer-service',
+                    component: () => import('@/views/ai/AiCustomerService.vue'),
+                    meta: { requiresAuth: true }
                 }
             ]
         }, {

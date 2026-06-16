@@ -1,9 +1,14 @@
 # 开发环境配置
+logging:
+  level:
+    com.example.filter.FlowLimitingFilter: DEBUG
 springdoc:
   paths-to-match: /api/**
   swagger-ui:
     operations-sorter: alpha
 spring:
+  config:
+    import: "optional:file:./.env"
   data:
     redis:
       database: 1
@@ -27,7 +32,7 @@ spring:
     username: elastic
     password: 123456
   datasource:
-    url: jdbc:mysql://localhost:3306/study_main
+    url: jdbc:mysql://localhost:3600/study_main
     username: root
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -46,8 +51,8 @@ spring:
       mail-limit: 60
     flow:
       period: 3
-      limit: 50
-      block: 30
+      limit: 3000
+      block: 5
     cors:
       origin: '*'
       credentials: false
@@ -63,3 +68,7 @@ spring:
     deepseek:
       api-key: ${DEEPSEEK_KEY:}
       base-url: 'https://api.deepseek.com'
+    tavily:
+      api-key: ${TAVILY_API_KEY:}
+    siliconflow:
+      api-key: ${SILICONFLOW_API_KEY:}

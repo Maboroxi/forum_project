@@ -128,4 +128,4 @@ function isRoleAdmin() {
     return takeAccessToken()?.role === 'admin'
 }
 
-export { post, get, login, logout, isUnauthorized, isRoleAdmin, accessHeader, fetchPost }
+export { post, get, login, logout, isUnauthorized, isRoleAdmin, accessHeader, fetchPost, takeAccessToken }

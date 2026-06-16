@@ -1,14 +1,8 @@
 <script setup>
 
 import {
-    Bell,
-    ChatDotSquare, Collection,
-    DataLine,
-    Document,
-    Files,
+    ChatDotSquare,
     Location, Message,
-    Monitor, Notification, Position, School,
-    Umbrella,
     User
 } from "@element-plus/icons-vue";
 import UserInfo from "@/components/UserInfo.vue";
@@ -21,19 +15,7 @@ const adminMenu = [
         title: '校园论坛管理', icon: Location, sub: [
             { title: '用户管理', icon: User, index: '/admin/user' },
             { title: '邮件管理', icon: Message, index: '/admin/email' },
-            { title: '帖子广场管理', icon: ChatDotSquare, index: '/admin/forum' },
-            { title: '失物招领管理', icon: Bell },
-            { title: '校园活动管理', icon: Notification },
-            { title: '表白墙管理', icon: Umbrella },
-            { title: '合作机构管理', icon: School }
-        ]
-    }, {
-        title: '探索与发现管理', icon: Position, sub: [
-            { title: '成绩管理', icon: Document },
-            { title: '课程表管理', icon: Files },
-            { title: '教务通知管理', icon: Monitor },
-            { title: '在线图书馆管理', icon: Collection },
-            { title: '预约教室管理', icon: DataLine }
+            { title: '帖子广场管理', icon: ChatDotSquare, index: '/admin/forum' }
         ]
     }
 ]
@@ -91,7 +73,7 @@ onMounted(() => {
                     <el-menu
                         router
                         :default-active="$route.path"
-                        :default-openeds="['1', '2']"
+                        :default-openeds="['1']"
                         style="min-height: calc(100vh - 57px);border: none">
                         <el-sub-menu :index="(index + 1).toString()"
                                      v-for="(menu, index) in adminMenu">
