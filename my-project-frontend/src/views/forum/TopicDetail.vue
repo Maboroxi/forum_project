@@ -285,6 +285,7 @@ function deleteComment(id) {
 
     .topic-main-right {
         width: 600px;
+        min-width: 0;
         padding: 10px 20px;
         display: flex;
         flex-direction: column;
@@ -294,6 +295,15 @@ function deleteComment(id) {
             line-height: 22px;
             opacity: 0.8;
             flex: 1;
+            overflow-wrap: anywhere;
+
+            :deep(img) {
+                display: block;
+                max-width: 100%;
+                height: auto;
+                object-fit: contain;
+                border-radius: 4px;
+            }
         }
     }
 }
