@@ -2,6 +2,7 @@ package com.example.user.controller.admin;
 
 import com.example.common.entity.PageRestBean;
 import com.example.common.entity.RestBean;
+import com.example.observability.AuditLogger;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.user.entity.dto.EmailRecord;
 import com.example.user.service.EmailService;
@@ -28,6 +29,7 @@ public class EmailAdminController {
     @GetMapping("/resend")
     public RestBean<Void> resendEmailRecord(@RequestParam int id) {
         if (service.resendEmailRecord(id)) {
+            AuditLogger.success("resend", "email-record", id);
             return RestBean.success();
         } else {
             return RestBean.failure(400, "邮件重发失败");

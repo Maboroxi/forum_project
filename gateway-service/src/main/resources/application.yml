@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: gateway-service
+  reactor:
+    context-propagation: auto
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -76,10 +78,38 @@ spring:
                 - Path=/api/**
 
 management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info,gateway,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  file:
+    name: ${LOG_DIR:log}/${spring.application.name}.json
+  structured:
+    format:
+      console: ${LOG_CONSOLE_FORMAT:logstash}
+      file: ${LOG_FILE_FORMAT:logstash}
+    json:
+      add:
+        application: ${spring.application.name}
+        environment: ${APP_ENV:dev}
+      stacktrace:
+        max-length: 8192
+  logback:
+    rollingpolicy:
+      max-history: 14
+      max-file-size: 50MB
+      total-size-cap: 2GB
 
 internal:
   service:

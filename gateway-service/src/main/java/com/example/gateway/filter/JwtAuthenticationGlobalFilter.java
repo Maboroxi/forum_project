@@ -156,7 +156,9 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
     private Mono<Void> writeFailure(ServerWebExchange exchange, HttpStatus httpStatus, int code, String message) {
         exchange.getResponse().setStatusCode(httpStatus);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        String body = "{\"id\":0,\"code\":" + code + ",\"data\":null,\"message\":\"" + message + "\"}";
+        String requestId = exchange.getRequest().getHeaders().getFirst(GatewayHeaders.REQUEST_ID);
+        String body = "{\"id\":" + (requestId == null ? "0" : requestId)
+                + ",\"code\":" + code + ",\"data\":null,\"message\":\"" + message + "\"}";
         DataBuffer buffer = exchange.getResponse().bufferFactory()
                 .wrap(body.getBytes(StandardCharsets.UTF_8));
         return exchange.getResponse().writeWith(Mono.just(buffer));

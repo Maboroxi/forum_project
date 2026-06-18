@@ -25,12 +25,21 @@ public class ElasticConfiguration extends ElasticsearchConfiguration {
     @Value("${spring.elasticsearch.password}")
     String password;
 
+    @Value("${spring.elasticsearch.ssl.enabled:false}")
+    boolean sslEnabled;
+
     @Value("classpath:es/http_ca.crt")
     Resource cert;
 
     @Override
     @SneakyThrows
     public ClientConfiguration clientConfiguration() {
+        if (!sslEnabled) {
+            return ClientConfiguration.builder()
+                    .connectedTo(uris)
+                    .withBasicAuth(username, password)
+                    .build();
+        }
 
         Certificate certificate = CertificateFactory.getInstance("X.509")
                 .generateCertificate(cert.getInputStream());

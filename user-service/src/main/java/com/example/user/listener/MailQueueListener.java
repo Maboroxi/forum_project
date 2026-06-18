@@ -2,10 +2,12 @@ package com.example.user.listener;
 
 import com.example.user.entity.dto.EmailRecord;
 import com.example.user.mapper.EmailRecordMapper;
+import com.example.observability.RabbitRequestContext;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitHandler;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.core.Message;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -26,14 +28,24 @@ public class MailQueueListener {
     String username;
 
     @RabbitHandler
-    public void sendMailMessage(EmailRecord email) {
-        try {
+    public void sendMailMessage(EmailRecord email, Message message) {
+        try (var ignored = RabbitRequestContext.open(message)) {
             sender.send(createMessage(email));
             email.setStatus(1);
             recordMapper.updateById(email);
-            log.info("邮件发送成功，邮件记录ID：{}，邮件接收人: {}", email.getId(), email.getEmail());
+            log.atInfo()
+                    .addKeyValue("eventType", "message.consume")
+                    .addKeyValue("messageId", message.getMessageProperties().getMessageId())
+                    .addKeyValue("queue", "mail")
+                    .addKeyValue("emailRecordId", email.getId())
+                    .log("Mail message sent");
         } catch (Exception e) {
-            log.error("邮件发送失败，邮件记录ID：{}，邮件接收人: {}, 错误信息: {}", email.getId(), email.getEmail(), e.getMessage());
+            log.atError()
+                    .addKeyValue("eventType", "application.error")
+                    .addKeyValue("messageId", message.getMessageProperties().getMessageId())
+                    .addKeyValue("emailRecordId", email.getId())
+                    .setCause(e)
+                    .log("Failed to send mail message");
             throw e;
         }
     }

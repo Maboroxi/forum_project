@@ -2,7 +2,6 @@ package com.example.config;
 
 import com.example.common.entity.RestBean;
 import com.example.filter.GatewayIdentityFilter;
-import com.example.filter.RequestLogFilter;
 import com.example.utils.Const;
 import jakarta.annotation.Resource;
 import jakarta.servlet.DispatcherType;
@@ -33,9 +32,6 @@ public class SecurityConfiguration {
     @Resource
     GatewayIdentityFilter gatewayIdentityFilter;
 
-    @Resource
-    RequestLogFilter requestLogFilter;
-
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
@@ -43,6 +39,7 @@ public class SecurityConfiguration {
                         .requestMatchers("/api/auth/**", "/error").permitAll()
                         .requestMatchers("/api/user/**").permitAll()
                         .requestMatchers("/internal/**").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole(Const.ROLE_ADMIN)
                         .anyRequest().hasAnyRole(Const.ROLE_DEFAULT, Const.ROLE_ADMIN)
@@ -56,8 +53,7 @@ public class SecurityConfiguration {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(conf -> conf
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .addFilterBefore(requestLogFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(gatewayIdentityFilter, RequestLogFilter.class)
+                .addFilterBefore(gatewayIdentityFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 

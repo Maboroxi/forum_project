@@ -13,6 +13,7 @@ import com.example.ai.tool.WebSearchTools;
 import com.example.common.entity.RestBean;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -46,6 +47,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
+@Slf4j
 public class AiChatServiceImpl implements AiChatService {
 
     private static final long SSE_TIMEOUT = Duration.ofMinutes(5).toMillis();
@@ -89,7 +91,12 @@ public class AiChatServiceImpl implements AiChatService {
 
     @Override
     public SseEmitter chat(JSONArray context) {
+        long started = System.nanoTime();
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
+        log.atInfo()
+                .addKeyValue("eventType", "ai.chat")
+                .addKeyValue("mode", "legacy")
+                .log("AI SSE session started");
         executor.execute(() -> {
             try {
                 List<Message> messages = new ArrayList<>();
@@ -104,10 +111,17 @@ public class AiChatServiceImpl implements AiChatService {
                         chunk -> sendRaw(emitter, chunk),
                         error -> completeError(emitter, error),
                         emitter::complete);
-                emitter.onCompletion(subscription::dispose);
-                emitter.onTimeout(subscription::dispose);
+                emitter.onCompletion(() -> {
+                    subscription.dispose();
+                    logAiSessionEnd("legacy", null, "completed", started, null);
+                });
+                emitter.onTimeout(() -> {
+                    subscription.dispose();
+                    logAiSessionEnd("legacy", null, "timeout", started, null);
+                });
             } catch (Exception e) {
                 completeError(emitter, e);
+                logAiSessionEnd("legacy", null, "failed", started, e);
             }
         });
         return emitter;
@@ -122,22 +136,40 @@ public class AiChatServiceImpl implements AiChatService {
             throw new IllegalStateException("当前对话正在生成回复");
         }
 
+        long started = System.nanoTime();
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         AtomicBoolean released = new AtomicBoolean();
         AtomicBoolean cancelled = new AtomicBoolean();
+        AtomicBoolean terminalLogged = new AtomicBoolean();
+        log.atInfo()
+                .addKeyValue("eventType", "ai.chat")
+                .addKeyValue("conversationId", conversationId)
+                .addKeyValue("userId", userId)
+                .log("AI SSE session started");
         Runnable release = () -> {
             if (released.compareAndSet(false, true)) {
                 activeConversations.remove(conversationId);
             }
         };
-        emitter.onCompletion(release);
+        emitter.onCompletion(() -> {
+            release.run();
+            if (terminalLogged.compareAndSet(false, true)) {
+                logAiSessionEnd("conversation", conversationId, "completed", started, null);
+            }
+        });
         emitter.onTimeout(() -> {
             cancelled.set(true);
             release.run();
+            if (terminalLogged.compareAndSet(false, true)) {
+                logAiSessionEnd("conversation", conversationId, "timeout", started, null);
+            }
         });
         emitter.onError(error -> {
             cancelled.set(true);
             release.run();
+            if (terminalLogged.compareAndSet(false, true)) {
+                logAiSessionEnd("conversation", conversationId, "failed", started, error);
+            }
         });
 
         ScheduledFuture<?> heartbeat = aiHeartbeatScheduler.scheduleAtFixedRate(
@@ -305,11 +337,25 @@ public class AiChatServiceImpl implements AiChatService {
             String result = "工具不可用";
             for (ToolCallback callback : callbacks) {
                 if (callback.getToolDefinition().name().equals(call.name())) {
+                    long toolStarted = System.nanoTime();
                     try {
                         result = callback.call(call.arguments(), new ToolContext(Map.of("userId", userId)));
                     } catch (Exception e) {
                         result = "工具调用失败，请稍后重试。";
+                        log.atWarn()
+                                .addKeyValue("eventType", "ai.tool")
+                                .addKeyValue("tool", call.name())
+                                .addKeyValue("conversationId", conversationId)
+                                .addKeyValue("durationMs", elapsedMs(toolStarted))
+                                .setCause(e)
+                                .log("AI tool call failed");
                     }
+                    log.atInfo()
+                            .addKeyValue("eventType", "ai.tool")
+                            .addKeyValue("tool", call.name())
+                            .addKeyValue("conversationId", conversationId)
+                            .addKeyValue("durationMs", elapsedMs(toolStarted))
+                            .log("AI tool call completed");
                     break;
                 }
             }
@@ -468,8 +514,30 @@ public class AiChatServiceImpl implements AiChatService {
     }
 
     private void completeError(SseEmitter emitter, Throwable error) {
+        log.atError()
+                .addKeyValue("eventType", "application.error")
+                .setCause(error)
+                .log("AI SSE processing failed");
         sendJson(emitter, "error", "error", safeMessage(error));
         emitter.complete();
+    }
+
+    private void logAiSessionEnd(String mode, Integer conversationId, String outcome,
+                                 long started, Throwable error) {
+        var event = "failed".equals(outcome) ? log.atWarn() : log.atInfo();
+        event.addKeyValue("eventType", "ai.chat")
+                .addKeyValue("mode", mode)
+                .addKeyValue("conversationId", conversationId)
+                .addKeyValue("outcome", outcome)
+                .addKeyValue("durationMs", elapsedMs(started));
+        if (error != null) {
+            event.setCause(error);
+        }
+        event.log("AI SSE session finished");
+    }
+
+    private long elapsedMs(long started) {
+        return (System.nanoTime() - started) / 1_000_000;
     }
 
     private String safeMessage(Throwable error) {

@@ -96,10 +96,10 @@ Topic and comment content is stored as **Quill Delta JSON** in MySQL. Preview te
 | Service | Port | Credentials |
 |---------|------|-------------|
 | MySQL 8.0 | 3306 | root / 123456 |
-| Elasticsearch 8.11 | 9200 (HTTPS) | elastic / 123456 |
+| Elasticsearch 8.18.8 | 9200 (HTTP) | elastic / 123456 |
 | RabbitMQ 3.12 | 5672 / 15672 (mgmt) | admin / admin |
 | MinIO | 9000 / 9001 (mgmt) | minio / password |
 
 MinIO requires manual bucket creation: visit `http://localhost:9001`, create bucket `study`.
 
-ES uses TLS — `setup.sh` copies the CA cert from the ES container to `my-project-backend/src/main/resources/es/http_ca.crt`.
+Local ES uses password-authenticated HTTP. HTTPS deployments can enable `ES_SSL_ENABLED` and provide a CA certificate to `forum-service`.

@@ -14,6 +14,7 @@ import com.example.entity.vo.request.TopicTypeCreateVO;
 import com.example.entity.vo.request.TopicUpdateVO;
 import com.example.entity.vo.response.*;
 import com.example.mapper.*;
+import com.example.observability.RabbitRequestContext;
 import com.example.repository.TopicRepository;
 import com.example.service.TopicService;
 import com.example.utils.CacheUtils;
@@ -201,7 +202,9 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, Topic> implements
                         "type", "success",
                         "url", "/index/topic-detail/"+com.getTid()
                 );
-                amqpTemplate.convertAndSend(NOTIFICATION_EXCHANGE, NOTIFICATION_ROUTING_KEY, msg);
+                amqpTemplate.convertAndSend(
+                        NOTIFICATION_EXCHANGE, NOTIFICATION_ROUTING_KEY, msg,
+                        RabbitRequestContext.outbound());
             }
         } else if (!Objects.equals(uid, topic.getUid())) {
             Map<String, Object> msg = Map.of(
@@ -211,7 +214,9 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, Topic> implements
                     "type", "success",
                     "url", "/index/topic-detail/"+topic.getId()
             );
-            amqpTemplate.convertAndSend(NOTIFICATION_EXCHANGE, NOTIFICATION_ROUTING_KEY, msg);
+            amqpTemplate.convertAndSend(
+                    NOTIFICATION_EXCHANGE, NOTIFICATION_ROUTING_KEY, msg,
+                    RabbitRequestContext.outbound());
         }
         return null;
     }

@@ -28,7 +28,8 @@ public class SecurityConfiguration {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
                 .authorizeHttpRequests(conf -> conf
-                        .requestMatchers("/error", "/internal/**").permitAll()
+                        .requestMatchers("/error", "/internal/**",
+                                "/actuator/health", "/actuator/prometheus").permitAll()
                         .anyRequest().hasAnyRole("user", "admin")
                 )
                 .exceptionHandling(conf -> conf

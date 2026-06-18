@@ -65,7 +65,7 @@ cd my-project-frontend && npm run dev
 | Spring Security | 6.x |
 | JWT (java-jwt) | 4.3 |
 | Spring AI | 1.1.2 (DeepSeek) |
-| Elasticsearch | 8.11.0 |
+| Elasticsearch | 8.18.8 |
 | RabbitMQ | 3.12 |
 | MinIO | latest |
 | Redis | 7-alpine |

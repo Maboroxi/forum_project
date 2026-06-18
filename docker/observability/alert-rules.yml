@@ -1,0 +1,79 @@
+groups:
+  - name: forum-runtime
+    rules:
+      - alert: ForumServiceDown
+        expr: up{job="forum-services"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Forum service is unavailable"
+          description: "{{ $labels.instance }} has not responded for 2 minutes."
+
+      - alert: ForumHighServerErrorRate
+        expr: |
+          (
+            sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            /
+            sum by (application) (rate(http_server_requests_seconds_count[5m]))
+          ) > 0.05
+          and
+          sum by (application) (increase(http_server_requests_seconds_count[5m])) >= 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 5xx rate for {{ $labels.application }}"
+          description: "The 5xx rate has exceeded 5% for 5 minutes."
+
+      - alert: ForumHighHttpLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, application) (
+              rate(http_server_requests_seconds_bucket{uri!~"/api/ai/chat.*"}[5m])
+            )
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP latency for {{ $labels.application }}"
+          description: "P95 latency has exceeded 2 seconds for 10 minutes."
+
+      - alert: ForumJvmHeapHigh
+        expr: |
+          (
+            sum by (application) (jvm_memory_used_bytes{area="heap"})
+            /
+            sum by (application) (jvm_memory_max_bytes{area="heap"})
+          ) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High JVM heap usage for {{ $labels.application }}"
+          description: "Heap usage has exceeded 85% for 10 minutes."
+
+      - alert: ObservabilityComponentDown
+        expr: up{job="observability"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Observability component is unavailable"
+          description: "{{ $labels.instance }} has not responded for 2 minutes."
+
+      - alert: HostDiskUsageHigh
+        expr: |
+          1 - (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+            /
+            node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}
+          ) > 0.80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host disk usage is above 80%"
+          description: "{{ $labels.mountpoint }} is running low on disk space."

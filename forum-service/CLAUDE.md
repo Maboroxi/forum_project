@@ -31,7 +31,7 @@ The `-P` flag selects the Maven profile, which filters `application-{environment
 
 - `config/` — All `@Configuration` classes: `SecurityConfiguration`, `WebConfiguration`, `RabbitConfiguration`, `ElasticConfiguration`, `MinioConfiguration`, `SwaggerConfiguration`
 - `controller/` — Public-facing REST controllers; `controller/admin/` for admin-only endpoints
-- `filter/` — Four servlet filters chained in SecurityConfiguration: `FlowLimitingFilter` (rate limit, order -101) → `CorsFilter` (order -102) → `JwtAuthenticationFilter` → `RequestLogFilter`
+- `filter/` — Security filters are chained in SecurityConfiguration. HTTP access logging and request context are provided by `common-observability`.
 - `service/` — Interfaces; `service/impl/` — implementations. Each service pair follows Interface-extends-`IService<Entity>` / Impl-extends-`ServiceImpl<Mapper, Entity>` pattern from MyBatis-Plus. Exception: `AiServiceImpl` and `EmailServiceImpl` are standalone (no MyBatis-Plus base).
 - `entity/dto/` — MyBatis-Plus entities with `@TableName`. Most implement `BaseData` for reflective DTO→VO conversion
 - `entity/vo/request/` and `entity/vo/response/` — Jakarta-validated request VOs and response VOs
@@ -78,7 +78,7 @@ Likes and collects are NOT written directly to MySQL. Instead:
 
 - `TopicServiceImpl` syncs each topic to ES on create/update/delete
 - Admin endpoint `/api/admin/forum/sync-to-es` triggers a full `syncAllTopicsToEs()`
-- ES is configured with TLS — the CA cert lives at `src/main/resources/es/http_ca.crt` (copied from the ES container by `setup.sh`)
+- Local ES uses password-authenticated HTTP. Set `ES_SSL_ENABLED=true` and provide `src/main/resources/es/http_ca.crt` when connecting to an HTTPS deployment
 - `ForumTools` (Spring AI `@Tool` component) queries ES to provide RAG context for AI chat
 
 ### RabbitMQ email pipeline

@@ -10,6 +10,7 @@ import com.example.announcement.service.AnnouncementService;
 import com.example.common.constants.RequestAttributes;
 import com.example.common.entity.PageRestBean;
 import com.example.common.entity.RestBean;
+import com.example.observability.AuditLogger;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -35,27 +36,36 @@ public class AnnouncementAdminController {
     @PostMapping("/create")
     public RestBean<Integer> create(@RequestBody @Valid AnnouncementCreateVO vo,
                                     @RequestAttribute(RequestAttributes.USER_ID) int uid) {
-        return RestBean.success(service.create(uid, vo));
+        int id = service.create(uid, vo);
+        AuditLogger.success("create", "announcement", id);
+        return RestBean.success(id);
     }
 
     @PostMapping("/update")
     public RestBean<Void> update(@RequestBody @Valid AnnouncementUpdateVO vo) {
-        return messageHandle(service.update(vo));
+        RestBean<Void> result = messageHandle(service.update(vo));
+        if (result.code() == 200) AuditLogger.success("update", "announcement", vo.getId());
+        return result;
     }
 
     @PostMapping("/publish")
     public RestBean<Void> publish(@RequestBody @Valid AnnouncementPublishVO vo) {
-        return messageHandle(service.publish(vo.getId(), vo.getPublished()));
+        RestBean<Void> result = messageHandle(service.publish(vo.getId(), vo.getPublished()));
+        if (result.code() == 200) AuditLogger.success("publish", "announcement", vo.getId());
+        return result;
     }
 
     @PostMapping("/top")
     public RestBean<Void> top(@RequestBody @Valid AnnouncementTopVO vo) {
-        return messageHandle(service.top(vo.getId(), vo.getTop()));
+        RestBean<Void> result = messageHandle(service.top(vo.getId(), vo.getTop()));
+        if (result.code() == 200) AuditLogger.success("top", "announcement", vo.getId());
+        return result;
     }
 
     @GetMapping("/delete")
     public RestBean<Void> delete(@RequestParam @Min(1) int id) {
         service.delete(id);
+        AuditLogger.success("delete", "announcement", id);
         return RestBean.success();
     }
 

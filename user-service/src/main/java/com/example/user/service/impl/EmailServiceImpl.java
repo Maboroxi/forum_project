@@ -6,6 +6,7 @@ import com.example.user.entity.dto.EmailRecord;
 import com.example.user.mapper.EmailRecordMapper;
 import com.example.user.service.EmailService;
 import com.example.user.utils.Const;
+import com.example.observability.RabbitRequestContext;
 import jakarta.annotation.Resource;
 import org.springframework.amqp.core.AmqpTemplate;
 import org.springframework.stereotype.Service;
@@ -31,7 +32,7 @@ public class EmailServiceImpl implements EmailService {
             default -> throw new IllegalArgumentException(type);
         };
         recordMapper.insert(emailRecord);
-        rabbitTemplate.convertAndSend(Const.MQ_MAIL, emailRecord);
+        rabbitTemplate.convertAndSend(Const.MQ_MAIL, emailRecord, RabbitRequestContext.outbound());
     }
 
     @Override
@@ -46,7 +47,7 @@ public class EmailServiceImpl implements EmailService {
             return false;
         }
         record.setStatus(0);
-        rabbitTemplate.convertAndSend(Const.MQ_MAIL, record);
+        rabbitTemplate.convertAndSend(Const.MQ_MAIL, record, RabbitRequestContext.outbound());
         recordMapper.updateById(record);
         return true;
     }

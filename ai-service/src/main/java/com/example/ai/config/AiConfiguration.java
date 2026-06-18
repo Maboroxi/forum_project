@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
@@ -31,6 +32,7 @@ public class AiConfiguration {
         executor.setMaxPoolSize(16);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("ai-chat-");
+        executor.setTaskDecorator(new ContextPropagatingTaskDecorator());
         executor.initialize();
         return executor;
     }
@@ -40,6 +42,7 @@ public class AiConfiguration {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(2);
         scheduler.setThreadNamePrefix("ai-heartbeat-");
+        scheduler.setTaskDecorator(new ContextPropagatingTaskDecorator());
         scheduler.initialize();
         return scheduler;
     }

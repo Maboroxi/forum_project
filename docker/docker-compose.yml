@@ -72,23 +72,24 @@ services:
 
   # ============================================================
   # Elasticsearch 8.x - 全文搜索
-  # HTTPS: https://localhost:9200 （Java 代码强制使用 SSL）
+  # HTTP: http://localhost:9200（本地开发使用密码认证）
   # ============================================================
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.18.8
     container_name: forum-es
     restart: unless-stopped
     environment:
       - discovery.type=single-node
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-      # ES 8.x 默认开启安全+SSL，只需设密码
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
       - ELASTIC_PASSWORD=123456
     ports:
       - "9200:9200"
     volumes:
       - es-data:/usr/share/elasticsearch/data
     healthcheck:
-      test: ["CMD", "curl", "-k", "-f", "-u", "elastic:123456", "https://localhost:9200/_cluster/health"]
+      test: ["CMD", "curl", "-f", "-u", "elastic:123456", "http://localhost:9200/_cluster/health"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -141,6 +142,108 @@ services:
       timeout: 5s
       retries: 5
 
+  # ============================================================
+  # Observability - logs, traces, metrics and dashboards
+  # Grafana: http://localhost:3000
+  # ============================================================
+  loki:
+    image: grafana/loki:3.4.2
+    container_name: forum-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/config.yml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki.yml:/etc/loki/config.yml:ro
+      - loki-data:/loki
+
+  tempo:
+    image: grafana/tempo:2.7.2
+    container_name: forum-tempo
+    restart: unless-stopped
+    command: -config.file=/etc/tempo/config.yml
+    ports:
+      - "3200:3200"
+    volumes:
+      - ./observability/tempo.yml:/etc/tempo/config.yml:ro
+      - tempo-data:/var/tempo
+
+  alloy:
+    image: grafana/alloy:v1.8.2
+    container_name: forum-alloy
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    ports:
+      - "12345:12345"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./observability/alloy.config:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../log:/var/log/forum/project-root:ro
+      - ../gateway-service/log:/var/log/forum/gateway-service:ro
+      - ../forum-service/log:/var/log/forum/forum-service:ro
+      - ../oss-service/log:/var/log/forum/oss-service:ro
+      - ../ai-service/log:/var/log/forum/ai-service:ro
+      - ../user-service/log:/var/log/forum/user-service:ro
+      - ../notification-service/log:/var/log/forum/notification-service:ro
+      - ../announcement-service/log:/var/log/forum/announcement-service:ro
+      - alloy-data:/var/lib/alloy
+    depends_on:
+      - loki
+      - tempo
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    container_name: forum-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus-data:/prometheus
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.0
+    container_name: forum-node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    container_name: forum-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - loki
+      - tempo
+      - prometheus
+
 volumes:
   nacos-data:
   nacos-logs:
@@ -149,3 +252,8 @@ volumes:
   es-data:
   rabbitmq-data:
   minio-data:
+  loki-data:
+  tempo-data:
+  alloy-data:
+  prometheus-data:
+  grafana-data:

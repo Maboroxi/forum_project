@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.common.entity.RestBean;
+import com.example.observability.AuditLogger;
 import com.example.user.entity.dto.Account;
 import com.example.user.entity.dto.AccountDetails;
 import com.example.user.entity.dto.AccountPrivacy;
@@ -87,6 +88,7 @@ public class AccountAdminController {
         AccountPrivacy savePrivacy = object.getJSONObject("privacy").toJavaObject(AccountPrivacy.class);
         BeanUtils.copyProperties(savePrivacy, privacy);
         privacyService.saveOrUpdate(savePrivacy);
+        AuditLogger.success("update", "user", id);
         return RestBean.success();
     }
 
@@ -96,6 +98,7 @@ public class AccountAdminController {
                 object.getInteger("id"),
                 object.getString("newPassword")
         );
+        AuditLogger.success("change-password", "user", object.getInteger("id"));
         return RestBean.success();
     }
 

@@ -12,6 +12,7 @@
 
     <modules>
         <module>common-core</module>
+        <module>common-observability</module>
         <module>gateway-service</module>
         <module>forum-service</module>
         <module>oss-service</module>

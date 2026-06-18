@@ -15,7 +15,12 @@ public record PageRestBean<T>(long id, int code, PageList<T> data, String messag
     }
 
     private static long requestId() {
-        String requestId = Optional.ofNullable(MDC.get("reqId")).orElse("0");
-        return Long.parseLong(requestId);
+        String requestId = Optional.ofNullable(MDC.get("requestId"))
+                .orElseGet(() -> Optional.ofNullable(MDC.get("reqId")).orElse("0"));
+        try {
+            return Long.parseLong(requestId);
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
     }
 }

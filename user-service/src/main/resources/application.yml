@@ -34,10 +34,13 @@ spring:
     virtual-host: /
     listener:
       simple:
+        observation-enabled: true
         retry:
           enabled: true
           max-attempts: 3
           initial-interval: 1000ms
+    template:
+      observation-enabled: true
   mail:
     host: smtp.163.com
     username: ${STMP_EMAIL:}
@@ -63,7 +66,35 @@ internal:
     token: ${INTERNAL_SERVICE_TOKEN:change-me-in-production}
 
 management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  file:
+    name: ${LOG_DIR:log}/${spring.application.name}.json
+  structured:
+    format:
+      console: ${LOG_CONSOLE_FORMAT:logstash}
+      file: ${LOG_FILE_FORMAT:logstash}
+    json:
+      add:
+        application: ${spring.application.name}
+        environment: ${APP_ENV:dev}
+      stacktrace:
+        max-length: 8192
+  logback:
+    rollingpolicy:
+      max-history: 14
+      max-file-size: 50MB
+      total-size-cap: 2GB

@@ -26,14 +26,19 @@ spring:
     virtual-host: /
     listener:
       simple:
+        observation-enabled: true
         retry:
           enabled: true
           max-attempts: 3
           initial-interval: 1000ms
+    template:
+      observation-enabled: true
   elasticsearch:
     uris: ${ES_URIS:localhost:9200}
     username: ${ES_USERNAME:elastic}
     password: ${ES_PASSWORD:123456}
+    ssl:
+      enabled: ${ES_SSL_ENABLED:false}
   datasource:
     url: ${MYSQL_URL:jdbc:mysql://localhost:3306/study_main}
     username: ${MYSQL_USERNAME:root}

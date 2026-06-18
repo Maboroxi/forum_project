@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.example.common.entity.PageRestBean;
 import com.example.common.entity.RestBean;
+import com.example.observability.AuditLogger;
 import com.example.entity.vo.request.TopicTypeCreateVO;
 import com.example.entity.vo.response.TopicPreviewVO;
 import com.example.entity.vo.response.TopicTypeVO;
@@ -39,6 +40,7 @@ public class ForumAdminController {
     @GetMapping("/delete")
     public RestBean<Void> delete(@RequestParam int tid){
         service.deleteTopic(tid);
+        AuditLogger.success("delete", "topic", tid);
         return RestBean.success();
     }
 
@@ -48,6 +50,7 @@ public class ForumAdminController {
                 object.getIntValue("tid"),
                 object.getBooleanValue("status")
         );
+        AuditLogger.success("top", "topic", object.getIntValue("tid"));
         return RestBean.success();
     }
 
@@ -57,6 +60,7 @@ public class ForumAdminController {
                 object.getIntValue("tid"),
                 object.getBooleanValue("status")
         );
+        AuditLogger.success("lock", "topic", object.getIntValue("tid"));
         return RestBean.success();
     }
 
@@ -66,6 +70,7 @@ public class ForumAdminController {
                 object.getIntValue("tid"),
                 object.getBooleanValue("status")
         );
+        AuditLogger.success("visibility", "topic", object.getIntValue("tid"));
         return RestBean.success();
     }
 
@@ -77,24 +82,28 @@ public class ForumAdminController {
     @PostMapping("/prohibited-save")
     public RestBean<Void> saveProhibitedList(@RequestBody JSONArray array) {
         prohibitedUtils.setProhibitedWords(array.toList(String.class));
+        AuditLogger.success("update", "prohibited-words", "all");
         return RestBean.success();
     }
 
     @PostMapping("/update-type")
     public RestBean<Void> updateType(@RequestBody TopicTypeVO vo) {
         service.updateTopicType(vo);
+        AuditLogger.success("update", "topic-type", vo.getId());
         return RestBean.success();
     }
 
     @GetMapping("/delete-type")
     public RestBean<Void> deleteType(@RequestParam int tid) {
         service.deleteTopicType(tid);
+        AuditLogger.success("delete", "topic-type", tid);
         return RestBean.success();
     }
 
     @PostMapping("/create-type")
     public RestBean<Void> createType(@RequestBody TopicTypeCreateVO vo) {
         service.createTopicType(vo);
+        AuditLogger.success("create", "topic-type", vo.getName());
         return RestBean.success();
     }
 
@@ -102,12 +111,14 @@ public class ForumAdminController {
     public RestBean<Void> changeTopicType(@RequestParam int tid,
                                           @RequestParam int type) {
         service.changeTopicType(tid, type);
+        AuditLogger.success("change-type", "topic", tid);
         return RestBean.success();
     }
 
     @GetMapping("/sync-to-es")
     public RestBean<Void> syncToEs() {
         service.syncAllTopicsToEs();
+        AuditLogger.success("sync", "elasticsearch-topic-index", "all");
         return RestBean.success();
     }
 }
