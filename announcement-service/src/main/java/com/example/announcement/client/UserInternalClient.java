@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-@FeignClient(name = "user-service", path = "/internal/user")
+@FeignClient(name = "user-service", path = "/internal/user", contextId = "announcementUserInternalClient")
 public interface UserInternalClient {
 
     @PostMapping("/batch")

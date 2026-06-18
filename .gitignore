@@ -6,3 +6,7 @@ doc/
 .playwright-mcp
 *.png
 target/
+
+.env
+.env.*
+!.env.example

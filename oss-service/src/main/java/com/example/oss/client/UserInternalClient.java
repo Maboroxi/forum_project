@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 
 import java.util.Map;
 
-@FeignClient(name = "user-service", path = "/internal/user")
+@FeignClient(name = "user-service", path = "/internal/user", contextId = "ossUserInternalClient")
 public interface UserInternalClient {
 
     @PutMapping("/{id}/avatar")
