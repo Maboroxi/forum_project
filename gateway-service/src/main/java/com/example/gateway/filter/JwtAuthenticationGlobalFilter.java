@@ -43,11 +43,14 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
 
     private final ReactiveStringRedisTemplate redisTemplate;
     private final JWTVerifier verifier;
+    private final String internalToken;
 
     public JwtAuthenticationGlobalFilter(ReactiveStringRedisTemplate redisTemplate,
-                                         @Value("${spring.security.jwt.key}") String jwtKey) {
+                                         @Value("${spring.security.jwt.key}") String jwtKey,
+                                         @Value("${internal.service.token}") String internalToken) {
         this.redisTemplate = redisTemplate;
         this.verifier = JWT.require(Algorithm.HMAC256(jwtKey)).build();
+        this.internalToken = internalToken;
     }
 
     @Override
@@ -122,9 +125,10 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest().mutate()
                 .headers(headers -> {
                     headers.remove(GatewayHeaders.USER_ID);
-                    headers.remove(GatewayHeaders.USER_ID);
                     headers.remove(GatewayHeaders.USERNAME);
                     headers.remove(GatewayHeaders.USER_ROLES);
+                    headers.remove(GatewayHeaders.INTERNAL_TOKEN);
+                    headers.set(GatewayHeaders.INTERNAL_TOKEN, internalToken);
                 })
                 .build();
         return exchange.mutate().request(request).build();
@@ -139,9 +143,11 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
                     headers.remove(GatewayHeaders.USER_ID);
                     headers.remove(GatewayHeaders.USERNAME);
                     headers.remove(GatewayHeaders.USER_ROLES);
+                    headers.remove(GatewayHeaders.INTERNAL_TOKEN);
                     headers.set(GatewayHeaders.USER_ID, String.valueOf(userId));
                     headers.set(GatewayHeaders.USERNAME, Objects.toString(username, ""));
                     headers.set(GatewayHeaders.USER_ROLES, String.join(",", roles));
+                    headers.set(GatewayHeaders.INTERNAL_TOKEN, internalToken);
                 })
                 .build();
         return exchange.mutate().request(request).build();

@@ -36,7 +36,20 @@ OSS 服务注册服务名：
 oss-service
 ```
 
-4. 启动 Gateway：
+4. 启动 AI 服务：
+
+```bash
+cd ai-service
+mvn spring-boot:run
+```
+
+AI 服务注册名：
+
+```text
+ai-service
+```
+
+5. 启动 Gateway：
 
 ```bash
 cd gateway-service
@@ -52,6 +65,7 @@ Gateway 默认端口：
 ## 当前路由
 
 ```text
+/api/ai/**     -> lb://ai-service
 /api/image/**  -> lb://oss-service
 /api/file/**   -> lb://oss-service
 /images/**     -> lb://oss-service
@@ -70,6 +84,7 @@ JWT_KEY  JWT 签名密钥，需要和单体后端保持一致，默认 abcdefghi
 REDIS_HOST  Redis 地址，默认 localhost
 REDIS_PORT  Redis 端口，默认 6379
 REDIS_DATABASE  Redis database，默认 1
+INTERNAL_SERVICE_TOKEN  内部服务凭证，需要与下游服务保持一致
 ```
 
 示例：
@@ -86,12 +101,15 @@ NACOS_DISCOVERY_ENABLED=false mvn spring-boot:run
 
 ## 当前边界
 
-这一版 Gateway 负责统一处理 CORS 和 JWT 鉴权。登录、登出、注册、重置密码仍由单体后端处理；OSS 相关接口转发到 `oss-service`；其他 `/api/**` 请求由 Gateway 校验 JWT 后放行，并向下游服务透传用户身份：
+这一版 Gateway 负责统一处理 CORS 和 JWT 鉴权。AI 与 OSS 接口分别转发到独立
+服务，其他 `/api/**` 仍转发到单体。Gateway 会覆盖客户端提交的身份头和内部
+服务凭证，再向下游透传：
 
 ```text
 X-User-Id
 X-Username
 X-User-Roles
+X-Internal-Token
 ```
 
 `/api/admin/**` 会在 Gateway 校验 `ROLE_admin` 权限。

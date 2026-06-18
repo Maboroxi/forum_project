@@ -29,7 +29,7 @@ onMounted(() => {
 <template>
   <el-config-provider :locale="zhCn">
       <div class="wrapper">
-          <router-view/>
+        <router-view/>
       </div>
   </el-config-provider>
 </template>

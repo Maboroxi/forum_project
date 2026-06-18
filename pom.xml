@@ -15,5 +15,6 @@
         <module>gateway-service</module>
         <module>my-project-backend</module>
         <module>oss-service</module>
+        <module>ai-service</module>
     </modules>
 </project>

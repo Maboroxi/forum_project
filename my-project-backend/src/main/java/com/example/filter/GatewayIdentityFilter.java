@@ -11,6 +11,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -20,12 +21,19 @@ import java.util.List;
 @Component
 public class GatewayIdentityFilter extends OncePerRequestFilter {
 
+    private final String internalToken;
+
+    public GatewayIdentityFilter(@Value("${internal.service.token}") String internalToken) {
+        this.internalToken = internalToken;
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String userId = request.getHeader(GatewayHeaders.USER_ID);
-        if (userId != null && !userId.isBlank()) {
+        String suppliedToken = request.getHeader(GatewayHeaders.INTERNAL_TOKEN);
+        if (internalToken.equals(suppliedToken) && userId != null && !userId.isBlank()) {
             request.setAttribute(Const.ATTR_USER_ID, Integer.parseInt(userId));
             String username = request.getHeader(GatewayHeaders.USERNAME);
             String roles = request.getHeader(GatewayHeaders.USER_ROLES);

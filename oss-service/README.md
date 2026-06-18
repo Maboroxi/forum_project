@@ -41,6 +41,19 @@ POST /api/file/text     上传文本文件并提取内容，需要登录
 GET  /images/**         读取公开图片
 ```
 
+文本上传响应除原有 `content`、`filename`、`size` 外，还包含 `fileKey`。新上传
+对象使用 `/chat/{userId}/...` 路径。
+
+内部接口：
+
+```text
+GET /internal/file/text
+GET /internal/image/content
+```
+
+内部接口只接受一致的 `X-Internal-Token`。文本对象必须属于
+`/chat/{userId}/...`，图片对象必须在 `db_image_store` 中属于对应用户。
+
 ## 身份来源
 
 OSS 服务不解析 JWT，登录态由 Gateway 统一校验。Gateway 会向 OSS 服务注入：
@@ -68,6 +81,7 @@ MYSQL_PASSWORD          MySQL 密码，默认 123456
 MINIO_ENDPOINT          MinIO 地址，默认 http://localhost:9000
 MINIO_USERNAME          MinIO 用户名，默认 minio
 MINIO_PASSWORD          MinIO 密码，默认 password
+INTERNAL_SERVICE_TOKEN  内部服务凭证，需要与 Gateway、AI、单体一致
 ```
 
 只验证本地启动、不注册 Nacos 时：

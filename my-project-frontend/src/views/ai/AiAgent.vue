@@ -90,7 +90,7 @@
                          @click="uploadedImages.splice(i, 1)" />
             </span>
             <el-tag v-if="uploadedFileContent" closable
-                    @close="uploadedFileContent = ''; uploadedFileName = ''"
+                    @close="uploadedFileContent = ''; uploadedFileName = ''; uploadedFileKey = ''"
                     type="warning" size="small">
               📄 {{ uploadedFileName }}
             </el-tag>
@@ -157,6 +157,7 @@ const enableWebSearch = ref(false)
 const uploadedImages = ref([])
 const uploadedFileContent = ref('')
 const uploadedFileName = ref('')
+const uploadedFileKey = ref('')
 const fileInputRef = ref(null)
 const messagesRef = ref(null)
 const switchLoading = ref(false)
@@ -186,6 +187,7 @@ function createNewConversation() {
     inputText.value = ''
     uploadedFileContent.value = ''
     uploadedFileName.value = ''
+    uploadedFileKey.value = ''
   })
 }
 
@@ -197,6 +199,7 @@ function switchConversation(id) {
   uploadedImages.value = []
   uploadedFileContent.value = ''
   uploadedFileName.value = ''
+  uploadedFileKey.value = ''
   apiConversationMessages(id, data => {
     messages.value = (data || []).map(m => {
       let text = m.text
@@ -208,7 +211,9 @@ function switchConversation(id) {
         text = obj.text || text
         fileName = obj.fileName || null
         fileContent = obj.fileContent || null
-        imageUrls = obj.imageUrls || null  // 图片 URL
+        imageUrls = obj.imageKeys
+            ? obj.imageKeys.map(key => axios.defaults.baseURL + '/images' + key)
+            : (obj.imageUrls || null)
       } catch { /* 纯文本消息，直接使用 */ }
       // 工具结果转成历史提示显示
       if (m.messageType === 'tool_result') {
@@ -263,8 +268,7 @@ async function handleImageUpload(file) {
       }
     })
     if (data.code === 200) {
-      // 后端返回的是 MinIO 路径（如 /cache/20240616/uuid）
-      // 需要拼成完整 URL：http://localhost:8080/images/cache/20240616/uuid
+      // 后端返回 MinIO 对象键，展示地址仍统一经过当前 Gateway。
       const fullUrl = axios.defaults.baseURL + '/images' + data.data
       uploadedImages.value.push(fullUrl)
       ElMessage.success('图片已上传')
@@ -292,6 +296,7 @@ function handleTextFileUpload(event) {
   apiUploadTextFile(formData, data => {
     uploadedFileContent.value = data.content
     uploadedFileName.value = data.filename
+    uploadedFileKey.value = data.fileKey || ''
     ElMessage.success(`已读取「${data.filename}」(共 ${data.size} 字符)`)
   }, () => {
     ElMessage.error('文件上传失败')
@@ -315,6 +320,7 @@ async function sendMessage() {
 
   const currentFileContent = uploadedFileContent.value
   const currentFileName = uploadedFileName.value
+  const currentFileKey = uploadedFileKey.value
   const currentImages = [...uploadedImages.value]
   const currentText = text
 
@@ -336,14 +342,22 @@ async function sendMessage() {
 
   const body = {
     text: currentText || '请分析这张图片',
-    imageUrls: currentImages,
+    imageKeys: currentImages.map(url => {
+      const marker = url.indexOf('/images/')
+      return marker >= 0 ? url.substring(marker + '/images'.length) : url
+    }),
     enableWebSearch: enableWebSearch.value
   }
   if (currentFileContent) {
-    body.fileContent = currentFileContent
     body.fileName = currentFileName
+    if (currentFileKey) {
+      body.fileKey = currentFileKey
+    } else {
+      body.fileContent = currentFileContent
+    }
     uploadedFileContent.value = ''
     uploadedFileName.value = ''
+    uploadedFileKey.value = ''
   }
 
   apiChatWithConversation(

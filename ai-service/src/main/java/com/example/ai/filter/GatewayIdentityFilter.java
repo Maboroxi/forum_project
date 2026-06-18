@@ -1,14 +1,14 @@
-package com.example.oss.filter;
+package com.example.ai.filter;
 
 import com.example.common.constants.GatewayHeaders;
+import com.example.common.constants.RequestAttributes;
 import com.example.common.entity.RestBean;
-import com.example.oss.utils.Const;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.http.MediaType;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -28,45 +28,30 @@ public class GatewayIdentityFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String path = request.getRequestURI();
-        if (path.startsWith("/internal/")) {
-            if (internalToken.equals(request.getHeader(GatewayHeaders.INTERNAL_TOKEN))) {
-                filterChain.doFilter(request, response);
-            } else {
-                writeUnauthorized(response);
-            }
-            return;
-        }
-        if (isPublicPath(path)) {
+        if (request.getRequestURI().startsWith("/actuator/")
+                || request.getRequestURI().startsWith("/error")) {
             filterChain.doFilter(request, response);
             return;
         }
 
+        String suppliedToken = request.getHeader(GatewayHeaders.INTERNAL_TOKEN);
         String userId = request.getHeader(GatewayHeaders.USER_ID);
-        if (userId == null || userId.isBlank()) {
-            writeUnauthorized(response);
+        if (!internalToken.equals(suppliedToken) || userId == null || userId.isBlank()) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.getWriter().write(RestBean.unauthorized("请求必须通过 Gateway 访问").asJsonString());
             return;
         }
 
         try {
-            request.setAttribute(Const.ATTR_USER_ID, Integer.parseInt(userId));
+            request.setAttribute(RequestAttributes.USER_ID, Integer.parseInt(userId));
         } catch (NumberFormatException e) {
-            writeUnauthorized(response);
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.getWriter().write(RestBean.unauthorized("无效的用户身份").asJsonString());
             return;
         }
         filterChain.doFilter(request, response);
-    }
-
-    private boolean isPublicPath(String path) {
-        return path.startsWith("/images/")
-                || path.startsWith("/actuator/")
-                || path.startsWith("/error");
-    }
-
-    private void writeUnauthorized(HttpServletResponse response) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.getWriter().write(RestBean.unauthorized("登录状态已过期，请重新登录！").asJsonString());
     }
 }

@@ -5,6 +5,11 @@ import {accessHeader} from '@/net/index.js'
 // 旧的 SSE 聊天函数 - 保留给浮动 AiChatWindow 使用
 export const apiChatWithAI = async (context, onMessage, onError, onComplete) => {
     const response = await fetchPost('/api/ai/chat', context)
+    if (!response.ok) {
+        const error = await response.json().catch(() => null)
+        onError && onError(error?.message || 'AI 服务暂时不可用')
+        return
+    }
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     while (true) {
@@ -54,6 +59,11 @@ export const apiChatWithConversation = async (conversationId, body, onMessage, o
             },
             body: JSON.stringify(body)
         })
+        if (!response.ok) {
+            const error = await response.json().catch(() => null)
+            onError && onError(error?.message || `请求失败 (${response.status})`)
+            return
+        }
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';

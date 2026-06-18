@@ -43,6 +43,13 @@ spring:
           default-filters:
             - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials RETAIN_FIRST
           routes:
+            - id: ai-service
+              uri: lb://ai-service
+              order: -20
+              predicates:
+                - Path=/api/ai/**
+              metadata:
+                response-timeout: -1
             - id: oss-service
               uri: lb://oss-service
               order: -10
@@ -58,3 +65,7 @@ management:
     web:
       exposure:
         include: health,info,gateway
+
+internal:
+  service:
+    token: ${INTERNAL_SERVICE_TOKEN:change-me-in-production}

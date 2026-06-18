@@ -65,9 +65,10 @@ public class FileController {
                     + "\n\n... (文件过长，仅显示前 " + MAX_CONTENT_LENGTH + " 字符)";
         }
 
-        String objectName = "/chat/" + format.format(new Date()) + "/"
+        String objectName = "/chat/" + userId + "/" + format.format(new Date()) + "/"
                 + UUID.randomUUID().toString().replace("-", "")
                 + "." + ext;
+        boolean stored = true;
         try {
             PutObjectArgs args = PutObjectArgs.builder()
                     .bucket("study")
@@ -77,12 +78,14 @@ public class FileController {
             client.putObject(args);
         } catch (Exception e) {
             log.error("文本文件存储到 MinIO 失败: " + e.getMessage(), e);
+            stored = false;
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("content", content);
         result.put("filename", originalFilename);
         result.put("size", content.length());
+        result.put("fileKey", stored ? objectName : null);
 
         return RestBean.success(result);
     }
