@@ -1,7 +1,6 @@
 package com.example.config;
 
 import com.example.common.entity.RestBean;
-import com.example.entity.vo.response.AuthorizeVO;
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
@@ -87,7 +86,7 @@ public class SwaggerConfiguration {
                                 .addApiResponse("200", new ApiResponse()
                                         .description("OK")
                                         .content(new Content().addMediaType("*/*", new MediaType()
-                                                .example(RestBean.success(new AuthorizeVO()).asJsonString())
+                                                .example(RestBean.success(Map.of("username", "", "role", "", "token", "", "expire", "")).asJsonString())
                                         ))
                                 )
                         )

@@ -4,29 +4,32 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.example.entity.dto.Account;
+import com.example.client.UserInternalClient;
 import com.example.entity.dto.Announcement;
 import com.example.entity.vo.request.AnnouncementCreateVO;
 import com.example.entity.vo.request.AnnouncementUpdateVO;
 import com.example.entity.vo.response.AnnouncementAdminVO;
 import com.example.entity.vo.response.AnnouncementDetailVO;
 import com.example.entity.vo.response.AnnouncementPreviewVO;
-import com.example.mapper.AccountMapper;
 import com.example.mapper.AnnouncementMapper;
 import com.example.service.AnnouncementService;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class AnnouncementServiceImpl extends ServiceImpl<AnnouncementMapper, Announcement> implements AnnouncementService {
 
     @Resource
-    AccountMapper accountMapper;
+    UserInternalClient userInternalClient;
+
+    @Value("${internal.service.token}")
+    private String internalToken;
 
     @Override
     public List<AnnouncementPreviewVO> latest(int limit) {
@@ -62,7 +65,35 @@ public class AnnouncementServiceImpl extends ServiceImpl<AnnouncementMapper, Ann
                 .orderByDesc("create_time")
                 .orderByDesc("id");
         Page<Announcement> result = baseMapper.selectPage(Page.of(page, size), query);
-        return convertPage(result, this::admin);
+        // Batch query user names from user-service
+        List<Integer> userIds = result.getRecords().stream()
+                .map(Announcement::getUid)
+                .distinct()
+                .toList();
+        Map<Integer, String> usernameMap = resolveUsernames(userIds);
+        return convertPage(result, announcement -> admin(announcement, usernameMap));
+    }
+
+    private Map<Integer, String> resolveUsernames(List<Integer> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            var resp = userInternalClient.batchQuery(internalToken, Map.of("ids", userIds));
+            if (resp.code() == 200 && resp.data() != null) {
+                Map<Integer, String> result = new HashMap<>();
+                resp.data().forEach((id, userData) -> {
+                    Object username = userData.get("username");
+                    if (username != null) {
+                        result.put(id, username.toString());
+                    }
+                });
+                return result;
+            }
+        } catch (Exception e) {
+            // Fallback: return empty map if user-service is unavailable
+        }
+        return Map.of();
     }
 
     @Override
@@ -134,11 +165,12 @@ public class AnnouncementServiceImpl extends ServiceImpl<AnnouncementMapper, Ann
         return announcement.asViewObject(AnnouncementPreviewVO.class);
     }
 
-    private AnnouncementAdminVO admin(Announcement announcement) {
+    private AnnouncementAdminVO admin(Announcement announcement, Map<Integer, String> usernameMap) {
         AnnouncementAdminVO vo = announcement.asViewObject(AnnouncementAdminVO.class);
-        Account account = accountMapper.selectById(announcement.getUid());
-        if(account != null)
-            vo.setUsername(account.getUsername());
+        String username = usernameMap.get(announcement.getUid());
+        if (username != null) {
+            vo.setUsername(username);
+        }
         return vo;
     }
 

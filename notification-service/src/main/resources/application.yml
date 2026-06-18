@@ -1,0 +1,39 @@
+server:
+  port: ${NOTIFICATION_SERVICE_PORT:8087}
+
+spring:
+  application:
+    name: notification-service
+  config:
+    import: "optional:file:./.env"
+  cloud:
+    nacos:
+      discovery:
+        enabled: ${NACOS_DISCOVERY_ENABLED:true}
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/study_main}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  rabbitmq:
+    addresses: ${RABBITMQ_HOST:localhost}
+    username: ${RABBITMQ_USERNAME:admin}
+    password: ${RABBITMQ_PASSWORD:admin}
+    virtual-host: /
+    listener:
+      simple:
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000ms
+
+internal:
+  service:
+    token: ${INTERNAL_SERVICE_TOKEN:change-me-in-production}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

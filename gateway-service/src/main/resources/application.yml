@@ -55,6 +55,16 @@ spring:
               order: -10
               predicates:
                 - Path=/api/image/**,/api/file/**,/images/**
+            - id: user-service
+              uri: lb://user-service
+              order: -5
+              predicates:
+                - Path=/api/auth/**,/api/user/**,/api/admin/user/**,/api/admin/email/**
+            - id: notification-service
+              uri: lb://notification-service
+              order: -3
+              predicates:
+                - Path=/api/notification/**
             - id: forum-monolith-service
               uri: lb://forum-monolith-service
               predicates:

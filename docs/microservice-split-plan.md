@@ -14,19 +14,23 @@
 gateway-service :8081
   |-- /api/image/**、/api/file/**、/images/** -> oss-service
   |-- /api/ai/**                            -> ai-service
+  |-- /api/auth/**、/api/user/**            -> user-service
+  |-- /api/admin/user/**、/api/admin/email/** -> user-service
+  |-- /api/notification/**                  -> notification-service
   `-- /api/**                                -> forum-monolith-service
 ```
 
-当前已经完成 Gateway、Nacos 服务发现、网关 JWT 鉴权、OSS 服务拆分和 AI 服务
-拆分，并完成 `common-core` 公共模块。用户、论坛、公告和通知业务仍由单体服务
-提供。
+当前已经完成 Gateway、Nacos 服务发现、网关 JWT 鉴权、OSS 服务拆分、AI 服务
+拆分、用户服务拆分，并完成 `common-core` 公共模块。论坛、公告和通知业务仍由
+单体服务提供。
 
 技术选型保持不变：
 
 ```text
 Nacos                 服务注册与发现
 Spring Cloud Gateway  统一入口、路由、CORS、鉴权
-OpenFeign             AI 到单体、AI 到 OSS 的同步调用
+OpenFeign             AI 到单体、AI 到 OSS、单体到用户、OSS 到用户的同步调用
+RabbitMQ             论坛评论 → 通知服务的异步事件（notification.exchange）
 Redis                 JWT 黑名单、封禁状态、缓存和限流数据
 ```
 
@@ -46,8 +50,10 @@ Redis                 JWT 黑名单、封禁状态、缓存和限流数据
 | 公共模块 | 已完成第一版 | `RestBean` 等响应模型和网关常量迁入 `common-core` |
 | AI 拆分 | 已完成并联调 | 会话、聊天、SSE、工具调用和 `/api/ai/**` 路由已独立 |
 | 单体重复代码清理 | 已完成 | 删除旧 AI/OSS Controller、Service、Mapper、Entity 和依赖 |
-| 用户服务拆分 | 未开始 | 登录、账号、权限仍在单体 |
-| 论坛等业务拆分 | 未开始 | 论坛、公告、通知仍在单体 |
+| 用户服务拆分 | 已完成第一版 | 详见 3.6 节，所有用户接口已独立路由，已通过编译验证 |
+| OSS 头像解耦 | 已完成 | OSS 不再直写 `db_account`，改为调用 user-service 内部 API |
+| 通知服务拆分 | 已完成第一版 | 详见 3.7 节，通知接口已独立路由，论坛通过 RabbitMQ 异步发送通知 |
+| 论坛等业务拆分 | 未开始 | 论坛、公告仍在单体 |
 
 历史工作中还修复了帖子详情页大图溢出问题。该修改不改变微服务边界，但应在
 后续前端回归测试中保留。
@@ -84,18 +90,19 @@ X-Username    用户名
 X-User-Roles  逗号分隔的 Spring Security 权限，例如 ROLE_user,ROLE_admin
 ```
 
-当前实际路由：
+当前实际路由（按 order 优先级排列）：
 
 ```text
-/api/image/**  -> lb://oss-service
-/api/file/**   -> lb://oss-service
-/images/**     -> lb://oss-service
-/api/ai/**     -> lb://ai-service
-/api/**        -> lb://forum-monolith-service
+order -20  /api/ai/**                            -> lb://ai-service
+order -10  /api/image/**、/api/file/**、/images/**   -> lb://oss-service
+order -5   /api/auth/**、/api/user/**               -> lb://user-service
+order -5   /api/admin/user/**、/api/admin/email/**  -> lb://user-service
+order -3   /api/notification/**                    -> lb://notification-service
+default    /api/**                                  -> lb://forum-monolith-service
 ```
 
-AI 和 OSS 路由优先级高于单体兜底路由。单体中的旧实现已经删除，不再承担备用
-AI/OSS 处理。
+AI、OSS 和用户服务路由优先级均高于单体兜底路由。单体中的旧 AI/OSS/用户实现
+已经删除，不再承担备用处理。
 
 当前未完成：
 
@@ -109,19 +116,30 @@ AI/OSS 处理。
 单体目前继续承载：
 
 ```text
-/api/auth/**
-/api/user/**
-/api/admin/user/**
-/api/admin/email/**
 /api/forum/**
 /api/admin/forum/**
 /api/announcement/**
 /api/admin/announcement/**
-/api/notification/**
 ```
 
-单体已加入 `GatewayIdentityFilter`，可将 Gateway 注入的请求头恢复为原有
-`SecurityContext` 和用户 ID 请求属性，避免立即重写现有 Controller。
+用户相关的 `/api/auth/**`、`/api/user/**`、`/api/admin/user/**` 和
+`/api/admin/email/**` 已全部迁移到 user-service。通知相关的
+`/api/notification/**` 已迁移到 notification-service。
+
+单体已删除：4 个用户 Controller、8 个用户 Service、4 个用户 Mapper、
+4 个用户 Entity、11 个用户 VO、JwtUtils、JwtAuthenticationFilter、
+两个 Email Listener、NotificationController、NotificationService/Impl、
+NotificationMapper、Notification 实体和 NotificationVO。
+
+单体 `SecurityConfiguration` 已瘦身：移除登录/登出处理器和 JWT 签发逻辑，
+只保留 Gateway 身份恢复和角色校验。`ForumController` 的禁言检查改为通过
+`UserInternalClient`（OpenFeign）调用 user-service，不再依赖 `AccountService`。
+`TopicServiceImpl.createComment()` 的评论通知已从进程内 `notificationService.addNotification()`
+改为通过 RabbitMQ 发送异步消息到 `notification.exchange`。
+
+保留在单体中供论坛代码继续工作（Phase 4 论坛拆分时再改为 OpenFeign）：
+- `Account`、`AccountDetails`、`AccountPrivacy` 实体和对应 Mapper
+- `FlowUtils`（TopicServiceImpl 仍使用频率控制）
 
 单体仍提供仅供 AI 使用的 `/internal/forum/**` 查询接口。该接口要求一致的
 `X-Internal-Token`，用于在论坛正式拆分前隔离 AI 对论坛数据的读取。
@@ -146,13 +164,12 @@ GET  /images/**         读取公开图片
 - 注册名为 `oss-service`，默认端口 `8082`
 - 不重复解析 JWT，依赖 Gateway 注入的用户上下文和内部服务凭证
 - 使用 MinIO 保存对象
-- 当前仍直接访问 MySQL 的账号和图片记录表
+- 已消除对 `db_account` 表的直接访问，头像更新通过 OpenFeign 调用
+  `PUT /internal/user/{id}/avatar`（user-service 返回旧头像路径供 OSS 清理）
 - 当前仍使用 Redis 处理原有上传限制逻辑
 - `/api/**` 和 `/internal/**` 均校验 `X-Internal-Token`，不能只伪造用户头访问
 
-这是过渡状态。OSS 服务可以拥有图片元数据，但不应长期直接修改用户服务拥有的
-账号数据。头像更新后续应改为调用 `user-service`，或由用户服务编排头像上传和
-资料更新。
+已删除 OSS 中的 `AccountMapper` 和 `Account` 实体，不再直连用户表。
 
 ### 3.4 common-core
 
@@ -212,6 +229,123 @@ POST    /api/ai/chat/{conversationId}
 - Tavily 联网搜索正常
 - SiliconFlow 图片识别和图片生成正常
 - 外部 URL、错误内部凭证和伪造用户请求头均被拒绝
+
+### 3.6 user-service
+
+2026-06-18 完成用户服务拆分（第一版），默认端口 `8084`。
+
+已迁移接口：
+
+```text
+GET     /api/auth/ask-code       请求邮件验证码
+POST    /api/auth/register       用户注册
+POST    /api/auth/reset-confirm  密码重置确认
+POST    /api/auth/reset-password  密码重置执行
+POST    /api/auth/login          JWT 登录（由 SecurityConfiguration 处理）
+GET     /api/auth/logout         JWT 登出
+
+GET     /api/user/info           获取用户基本信息
+GET     /api/user/details        获取用户详细资料
+POST    /api/user/save-details   保存详细资料
+POST    /api/user/modify-email   修改邮箱
+POST    /api/user/change-password 修改密码
+POST    /api/user/save-privacy   保存隐私设置
+GET     /api/user/privacy        获取隐私设置
+
+GET     /api/admin/user/list     后台用户列表
+GET     /api/admin/user/detail   后台用户详情
+POST    /api/admin/user/save     后台用户保存
+POST    /api/admin/user/change-password  后台修改密码
+
+GET     /api/admin/email/list    后台邮件记录列表
+GET     /api/admin/email/resend  后台邮件重发
+```
+
+内部 API（供其他服务调用，均校验 `X-Internal-Token`）：
+
+```text
+POST    /internal/user/batch       批量获取用户摘要（供论坛填充帖子/评论用户信息）
+GET     /internal/user/{id}        获取单个用户信息
+GET     /internal/user/{id}/status 查询 mute/banned 状态（供论坛禁言检查）
+PUT     /internal/user/{id}/avatar 更新头像（供 OSS 调用，返回旧头像路径）
+```
+
+模块组成：
+
+| 类别 | 文件数 | 说明 |
+|------|--------|------|
+| Controller | 6 | Authorize、Account、AccountAdmin、EmailAdmin、UserInternal、异常处理 |
+| Service | 8 | Account、AccountDetails、AccountPrivacy、Email（接口+实现） |
+| Mapper | 4 | Account、AccountDetails、AccountPrivacy、EmailRecord |
+| Entity (DTO) | 4 | Account、AccountDetails、AccountPrivacy、EmailRecord |
+| VO | 11 | 7 个 Request + 4 个 Response |
+| Filter | 2 | JwtAuthenticationFilter、GatewayIdentityFilter |
+| Listener | 2 | MailQueueListener、ErrorQueueListener（RabbitMQ 邮件消费者） |
+| Utils | 4 | JwtUtils、FlowUtils、Const、ControllerUtils |
+| Config | 2 | SecurityConfiguration、WebConfiguration |
+
+已实现的关键兼容：
+
+- JWT claim 格式与 Gateway 完全一致：`id`、`name`、`authorities`、`jti`、`exp`
+- JWT 签名算法 HMAC256 + 相同 key（`${JWT_KEY}`）
+- Redis key 格式保持不变：`jwt:blacklist:*`、`banned:block:*`、`verify:email:*`
+- 密码编码使用 BCrypt，与单体一致
+- 邮件发送仍通过 RabbitMQ `mail` 队列，Email Listener 一并迁入 user-service
+
+当前限制：
+
+- 仍与单体共享同一 MySQL `study_main` 数据库（同库阶段）
+- 单体中 TopicServiceImpl 仍直接通过 Account/AccountDetails/AccountPrivacy
+  Mapper 读取用户数据，等待 Phase 4 论坛拆分时改为 OpenFeign
+
+### 3.7 notification-service
+
+2026-06-18 完成通知服务拆分（第一版），默认端口 `8087`。
+
+已迁移接口：
+
+```text
+GET  /api/notification/list       获取用户通知列表（按时间倒序）
+GET  /api/notification/delete     删除单条通知（校验所有权）
+GET  /api/notification/delete-all 删除全部通知
+```
+
+模块组成：
+
+| 类别 | 文件数 | 说明 |
+|------|--------|------|
+| Controller | 3 | NotificationController + ValidationController + ErrorPageController |
+| Service | 2 | NotificationService + NotificationServiceImpl |
+| Mapper | 1 | NotificationMapper (MyBatis-Plus `db_notification`) |
+| Entity (DTO) | 1 | Notification |
+| VO | 1 | NotificationVO |
+| Filter | 1 | GatewayIdentityFilter |
+| Listener | 1 | NotificationMessageListener (RabbitMQ 消费者) |
+| Config | 3 | SecurityConfiguration + RabbitConfiguration |
+
+服务特点：
+
+- 通过 RabbitMQ `notification` 队列接收论坛评论通知事件
+- 交换机和路由键：`notification.exchange` → `notification.event`
+- 消息格式：`{"recipientUid": int, "title": str, "content": str, "type": str, "url": str}`
+- 不依赖其他任何微服务，完全自治
+- 与单体共享 MySQL `study_main` 数据库（`db_notification` 表）
+
+当前已修复的问题：
+
+- `Notification.time` 字段类型从 `String` 修复为 `Date`
+- `addNotification()` 现在会设置 `time = new Date()`
+- 列表查询增加了 `ORDER BY time DESC` 排序
+
+### 3.8 forum-monolith-service（更新后）
+
+单体 `TopicServiceImpl.createComment()` 中的通知发送已从直接调用
+`NotificationService` 改为通过 `AmqpTemplate` 发布 RabbitMQ 消息：
+
+```java
+amqpTemplate.convertAndSend("notification.exchange", "notification.event",
+    Map.of("recipientUid", ..., "title", ..., "content", ..., "type", ..., "url", ...));
+```
 
 ## 4. 目标服务与接口归属
 
@@ -344,72 +478,92 @@ OSS 收尾步骤：
 
 ### 阶段三：用户与认证服务
 
-状态：未开始。
+状态：已完成第一版（2026-06-18）。
 
-主要工作：
+已完成：
 
 - 迁移 `/api/auth/**`、`/api/user/**`、`/api/admin/user/**` 和
-  `/api/admin/email/**`
-- 保持 JWT claim、Redis 黑名单 key 和 Gateway 校验逻辑兼容
-- 提供内部用户摘要查询接口
-- 将 OSS 的头像资料更新改为调用用户服务
-- 决定 Gateway 只做本地 JWT 校验，还是对高风险操作回查用户服务
+  `/api/admin/email/**` 全部接口
+- JWT claim（`id`、`name`、`authorities`、`jti`、`exp`）、签名算法和
+  Redis 黑名单 key 与 Gateway 完全兼容
+- 提供 4 个内部用户 API：批量查询、单个查询、状态查询、头像更新
+- OSS 头像更新已改为调用 user-service 内部 API，不再直写 `db_account`
+- Gateway 继续做本地 JWT 校验（不增加回查延迟），黑名单和封禁状态通过
+  Redis 共享
+- 单体已删除全部用户 Controller/Service/Mapper，除 Forum 模块为过渡保留
+  的 Account Mapper/Entity 外，不再直接操作用户表
 
-用户服务稳定后，其他服务不再直接查询账号表。
+待后续：
+
+- 论坛拆分时将单体内残留的 Account/AccountDetails/AccountPrivacy Mapper
+  调用全部替换为 OpenFeign
+- 增加用户服务的集成测试和契约测试
+- 物理拆库（user-service 独立数据库）
 
 ### 阶段四：论坛、公告和通知
 
-状态：未开始。
+状态：正在进行。通知服务已完成（2026-06-18）。
 
 建议顺序：
 
 ```text
-notification-service
-announcement-service
-forum-service
+notification-service  ← 已完成
+announcement-service  ← 下一项
+forum-service         ← 最后
 ```
+
+**notification-service 已完成：**
+- 独立工程、Nacos 注册、MySQL 持久化
+- RabbitMQ 异步消息接收论坛评论通知
+- Gateway 路由（`order -3`）
+- 修复 `Notification.time` 类型（String → Date）
+- 单体已删除所有通知相关代码
 
 论坛最后拆分，因为它依赖用户、通知、OSS、Elasticsearch 和 Redis，调用关系和
 数据迁移风险最高。
 
 同步查询可使用 OpenFeign，例如论坛查询用户摘要；评论、互动、公告发布等通知
-更适合通过 RabbitMQ 事件异步处理，避免主业务被通知服务故障阻塞。
+通过 RabbitMQ 事件异步处理（已验证 notification-service 模式）。
 
 ## 7. 下一阶段验收标准
 
-下一阶段进入 `user-service`：
+user-service 已上线（2026-06-18）。下一阶段进入论坛等业务拆分：
 
-- 迁移 `/api/auth/**`、`/api/user/**`、`/api/admin/user/**` 和
-  `/api/admin/email/**`
-- 登录签发的 JWT 与 Gateway 当前 claim、签名和过期校验完全兼容
-- Redis 黑名单、封禁状态和角色校验保持兼容
-- OSS 不再直接写账号表，头像更新改由用户服务负责或编排
-- 单体删除对应用户 Controller、Service、Mapper 后仍可通过 Gateway 完成登录、
-  用户资料和后台用户管理回归
-- 为其他服务提供最小化的内部用户摘要接口，不共享用户数据库实体
+- 迁移 `/api/forum/**`、`/api/admin/forum/**` 到 forum-service
+- 迁移 `/api/announcement/**`、`/api/admin/announcement/**` 到 announcement-service
+- 迁移 `/api/notification/**` 到 notification-service
+- 单体内残留的 Account/AccountDetails/AccountPrivacy Mapper 调用全部替换为 OpenFeign
+- 通知发送（评论回复、互动等）改为通过 RabbitMQ 异步事件，解耦论坛与通知服务
+- 单体最终只保留 `/internal/forum/**`（供 AI 查询），或将其迁移到 forum-service
 
 ## 8. 当前风险与技术债
 
 - 内部服务若直接暴露端口，攻击者仍可能尝试绕过 Gateway。
 - 应用层已增加 `X-Internal-Token` 校验，但生产环境仍需通过网络策略关闭服务
   端口的公网访问。
-- Gateway、单体和用户相关模块对 Redis key、JWT claim 存在协议耦合，需要契约测试。
-- 当前共享数据库使服务边界仍可被 Mapper 跨表访问，需要代码审查约束。
+- Gateway、user-service 对 Redis key（JWT 黑名单、封禁状态）和 JWT claim
+  格式存在协议耦合，需要契约测试覆盖。
+- 当前共享数据库使服务边界仍可被 Mapper 跨表访问：单体内 TopicServiceImpl 仍
+  直接通过 Account/AccountDetails/AccountPrivacy Mapper 读取用户数据，需在
+  Phase 4 论坛拆分时改为 OpenFeign 调用。
+- user-service 尚未有独立的集成测试和契约测试。
 - 默认配置中存在开发用密钥和密码，不能直接用于生产环境。
 - 删除类接口仍有部分使用 GET，后续接口治理应调整为 DELETE。
 - 尚未形成统一的服务日志、trace ID、指标、告警和超时策略。
 - OpenFeign 已落地，仍需统一连接超时、读取超时、错误映射和有限重试策略。
+- user-service 的 Feign 调用（monolith -> user, OSS -> user）在用户服务
+  不可用时的降级策略尚未定义。
 
 ## 9. 最终目标
 
 ```text
 gateway-service
-  |-- user-service
-  |-- forum-service
-  |-- announcement-service
-  |-- notification-service
-  |-- oss-service
-  `-- ai-service
+  |-- user-service          ✅ 已完成
+  |-- notification-service  ✅ 已完成
+  |-- announcement-service  ⬜ 下一阶段
+  |-- forum-service         ⬜ 最后
+  |-- oss-service           ✅ 已完成
+  `-- ai-service            ✅ 已完成
 ```
 
 Gateway 是唯一公网后端入口；各服务拥有自己的业务和数据表；同步调用使用明确的

@@ -1,10 +1,9 @@
 package com.example.oss.service.impl;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.example.oss.entity.dto.Account;
+import com.example.common.entity.RestBean;
+import com.example.oss.client.UserInternalClient;
 import com.example.oss.entity.dto.StoreImage;
-import com.example.oss.mapper.AccountMapper;
 import com.example.oss.mapper.ImageStoreMapper;
 import com.example.oss.service.ImageService;
 import com.example.oss.utils.Const;
@@ -17,6 +16,7 @@ import io.minio.RemoveObjectArgs;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.compress.utils.IOUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -34,10 +35,13 @@ public class ImageServiceImpl extends ServiceImpl<ImageStoreMapper, StoreImage> 
     MinioClient client;
 
     @Resource
-    AccountMapper mapper;
+    UserInternalClient userInternalClient;
 
     @Resource
     FlowUtils flowUtils;
+
+    @Value("${internal.service.token}")
+    private String internalToken;
 
     private final SimpleDateFormat format = new SimpleDateFormat("yyyyMMdd");
 
@@ -89,19 +93,20 @@ public class ImageServiceImpl extends ServiceImpl<ImageStoreMapper, StoreImage> 
                 .build();
         try {
             client.putObject(args);
-            Account account = mapper.selectById(id);
-            if (account == null) {
+            RestBean<Map<String, String>> resp = userInternalClient.updateAvatar(
+                    internalToken, id, Map.of("avatar", imageName));
+            if (resp.code() != 200 || resp.data() == null) {
+                log.warn("更新用户头像失败: userId={}, message={}", id, resp.message());
                 return null;
             }
-            this.deleteOldAvatar(account.getAvatar());
-            if (mapper.update(null, Wrappers.<Account>update()
-                    .eq("id", id).set("avatar", imageName)) > 0) {
-                return imageName;
-            } else {
-                return null;
+            // Delete old avatar from MinIO
+            String oldAvatar = resp.data().get("oldAvatar");
+            if (oldAvatar != null && !oldAvatar.isEmpty()) {
+                this.deleteOldAvatar(oldAvatar);
             }
+            return imageName;
         } catch (Exception e) {
-            log.error("图片上传出现问题: " + e.getMessage(), e);
+            log.error("头像上传出现问题: " + e.getMessage(), e);
             return null;
         }
     }

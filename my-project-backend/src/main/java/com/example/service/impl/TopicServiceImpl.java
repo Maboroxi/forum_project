@@ -14,7 +14,6 @@ import com.example.entity.vo.request.TopicUpdateVO;
 import com.example.entity.vo.response.*;
 import com.example.mapper.*;
 import com.example.repository.TopicRepository;
-import com.example.service.NotificationService;
 import com.example.service.TopicService;
 import com.example.utils.CacheUtils;
 import com.example.utils.Const;
@@ -22,6 +21,7 @@ import com.example.utils.FlowUtils;
 import com.example.utils.ProhibitedUtils;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
+import org.springframework.amqp.core.AmqpTemplate;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -65,10 +65,13 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, Topic> implements
     StringRedisTemplate template;
 
     @Resource
-    NotificationService notificationService;
+    AmqpTemplate amqpTemplate;
 
     @Resource
     TopicRepository topicRepository;
+
+    private static final String NOTIFICATION_EXCHANGE = "notification.exchange";
+    private static final String NOTIFICATION_ROUTING_KEY = "notification.event";
 
     private Set<Integer> types = null;
     @PostConstruct
@@ -193,20 +196,24 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, Topic> implements
         if(vo.getQuote() > 0) {
             TopicComment com = commentMapper.selectById(vo.getQuote());
             if(!Objects.equals(account.getId(), com.getUid())) {
-                notificationService.addNotification(
-                        com.getUid(),
-                        "您有新的帖子评论回复",
-                        account.getUsername()+" 回复了你发表的评论，快去看看吧！",
-                        "success", "/index/topic-detail/"+com.getTid()
+                Map<String, Object> msg = Map.of(
+                        "recipientUid", com.getUid(),
+                        "title", "您有新的帖子评论回复",
+                        "content", account.getUsername()+" 回复了你发表的评论，快去看看吧！",
+                        "type", "success",
+                        "url", "/index/topic-detail/"+com.getTid()
                 );
+                amqpTemplate.convertAndSend(NOTIFICATION_EXCHANGE, NOTIFICATION_ROUTING_KEY, msg);
             }
         } else if (!Objects.equals(account.getId(), topic.getUid())) {
-            notificationService.addNotification(
-                    topic.getUid(),
-                    "您有新的帖子回复",
-                    account.getUsername()+" 回复了你发表主题: "+topic.getTitle()+"，快去看看吧！",
-                    "success", "/index/topic-detail/"+topic.getId()
+            Map<String, Object> msg = Map.of(
+                    "recipientUid", topic.getUid(),
+                    "title", "您有新的帖子回复",
+                    "content", account.getUsername()+" 回复了你发表主题: "+topic.getTitle()+"，快去看看吧！",
+                    "type", "success",
+                    "url", "/index/topic-detail/"+topic.getId()
             );
+            amqpTemplate.convertAndSend(NOTIFICATION_EXCHANGE, NOTIFICATION_ROUTING_KEY, msg);
         }
         return null;
     }

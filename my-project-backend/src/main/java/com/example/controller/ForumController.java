@@ -1,7 +1,7 @@
 package com.example.controller;
 
+import com.example.client.UserInternalClient;
 import com.example.common.entity.RestBean;
-import com.example.entity.dto.Account;
 import com.example.entity.dto.Interact;
 import com.example.entity.dto.Topic;
 import com.example.entity.vo.request.AddCommentVO;
@@ -9,7 +9,6 @@ import com.example.entity.vo.request.TopicCreateVO;
 import com.example.entity.vo.request.TopicDraftSaveVO;
 import com.example.entity.vo.request.TopicUpdateVO;
 import com.example.entity.vo.response.*;
-import com.example.service.AccountService;
 import com.example.service.TopicDraftService;
 import com.example.service.TopicService;
 import com.example.service.WeatherService;
@@ -19,10 +18,12 @@ import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/forum")
@@ -41,7 +42,10 @@ public class ForumController {
     ControllerUtils utils;
 
     @Resource
-    AccountService accountService;
+    UserInternalClient userInternalClient;
+
+    @Value("${internal.service.token}")
+    private String internalToken;
 
     @GetMapping("/weather")
     public RestBean<WeatherVO> weather(double longitude, double latitude){
@@ -62,8 +66,9 @@ public class ForumController {
     @PostMapping("/create-topic")
     public RestBean<Void> createTopic(@Valid @RequestBody TopicCreateVO vo,
                                       @RequestAttribute(Const.ATTR_USER_ID) int id) {
-        Account account = accountService.findAccountById(id);
-        if(account.isMute()) {
+        RestBean<Map<String, Boolean>> statusResp = userInternalClient.getUserStatus(internalToken, id);
+        if (statusResp.code() == 200 && statusResp.data() != null
+                && Boolean.TRUE.equals(statusResp.data().get("mute"))) {
             return RestBean.forbidden("您已被禁言，无法创建新的主题");
         }
         return utils.messageHandle(() -> topicService.createTopic(id, vo));
@@ -142,8 +147,9 @@ public class ForumController {
     @PostMapping("/add-comment")
     public RestBean<Void> addComment(@Valid @RequestBody AddCommentVO vo,
                                      @RequestAttribute(Const.ATTR_USER_ID) int id){
-        Account account = accountService.findAccountById(id);
-        if(account.isMute()) {
+        RestBean<Map<String, Boolean>> statusResp = userInternalClient.getUserStatus(internalToken, id);
+        if (statusResp.code() == 200 && statusResp.data() != null
+                && Boolean.TRUE.equals(statusResp.data().get("mute"))) {
             return RestBean.forbidden("您已被禁言，无法创建新的回复");
         }
         return utils.messageHandle(() -> topicService.createComment(id, vo));
