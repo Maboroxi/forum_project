@@ -1,4 +1,5 @@
 <script setup>
+import {isMobile} from "@/utils/device";
 
 import Card from "@/components/Card.vue";
 import {Message, Refresh, Select, User} from "@element-plus/icons-vue";
@@ -8,6 +9,7 @@ import {accessHeader} from "@/net";
 import {ElMessage} from "element-plus";
 import axios from "axios";
 import {apiAuthAskCode, apiUserDetail, apiUserDetailSave, apiUserModifyEmail} from "@/net/api/user";
+import MobileUserSetting from "@/views/mobile/MobileUserSetting.vue";
 
 const store = useStore()
 
@@ -124,7 +126,8 @@ onMounted(() => {
 </script>
 
 <template>
-    <div style="display: flex;max-width: 950px;margin: auto">
+    <mobile-user-setting v-if="isMobile"/>
+    <div v-else style="display: flex;max-width: 950px;margin: auto">
         <div class="settings-left">
             <card :icon="User" title="账号信息设置" desc="在这里编辑您的个人信息，您可以在隐私设置中选择是否展示这些信息"
                   v-loading="loading.form">

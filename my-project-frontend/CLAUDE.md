@@ -15,7 +15,7 @@ The dev server proxies `/api` requests to the backend at `http://localhost:8080`
 
 ## Architecture Overview
 
-**Stack:** Vue 3 (Composition API, `<script setup>`), Vite 4, Vue Router 4, Pinia, Element Plus 2.11, Axios, Quill Editor, markdown-it
+**Stack:** Vue 3 (Composition API, `<script setup>`), Vite 4, Vue Router 4, Pinia, Element Plus 2.11, **Vant 4** (mobile), Axios, Quill Editor, markdown-it
 
 ### Key directories
 
@@ -27,13 +27,40 @@ src/
 ├── router/index.js       # Vue Router config + beforeEach guards
 ├── store/index.js        # Pinia store (general)
 ├── components/           # Reusable components
+├── layouts/              # Layout components
+│   └── MobileLayout.vue  # Mobile shell (NavBar + TabBar)
+├── utils/
+│   └── device.js         # isMobile ref (768px breakpoint)
 ├── views/                # Page components
-│   ├── welcome/          # Login, Register, ForgetPassword
-│   ├── forum/            # TopicList, TopicDetail
+│   ├── welcome/          # Login, Register, ForgetPassword (responsive)
+│   ├── forum/            # TopicList, TopicDetail (responsive via mobile/ subdir)
+│   ├── mobile/           # Mobile-optimized page variants
+│   │   ├── MobileTopicList.vue
+│   │   └── MobileTopicDetail.vue
 │   ├── settings/         # UserSetting, PrivacySetting, ForumSetting
-│   └── admin/            # Admin dashboard + sub-sections
-└── App.vue               # Root component
+│   ├── ai/               # AiAgent (responsive)
+│   └── admin/            # Admin dashboard + sub-sections (responsive)
+└── App.vue               # Root component — detects isMobile, wraps MobileLayout
 ```
+
+### Responsive design pattern
+
+The app uses **template-level branching** with `isMobile` (from `src/utils/device.js`):
+
+```
+App.vue
+  ├─ MobileLayout (v-if="isMobile")  → Vant NavBar + TabBar + router-view
+  └─ router-view (v-else)            → Desktop layout untouched
+```
+
+Pages check `isMobile` at template root:
+- `v-if="isMobile"` → render Vant mobile variant
+- `v-else` → render desktop Element Plus variant
+
+Key rules:
+- **TabBar** hides on detail pages (`/topic-detail/`)
+- **NavBar** shows back arrow only on sub-pages (path depth > 2)
+- **Welcome** page hides NavBar and TabBar entirely
 
 ### HTTP layer (`src/net/index.js`)
 
@@ -82,8 +109,8 @@ welcome/*  + authenticated  → redirect to /index
 ### Pinia store (`src/store/index.js`)
 
 The `general` store holds:
-- `serverFonts` — server-loaded font configuration
-- `topicTypes` — cached topic type list (loaded once, reused across pages)
+- `user` — current user info (id, username, role, avatar)
+- `forum.types` — cached topic type list (loaded once, reused across pages)
 
 ### Quill rich text
 
@@ -93,9 +120,13 @@ Both topic content and comments use Quill Delta JSON format. The editor componen
 
 `AiChatWindow.vue` sends full conversation context (array of `{type, text}`) to `POST /api/ai/chat` via `fetchPost()`. The response is an SSE stream consumed through a `ReadableStream` reader — each chunk is appended to the assistant's message text in real-time. Key states: loading (pulsing dots), error ("生成失败，请重试"), empty (welcome message).
 
+The standalone `AiAgent.vue` (at `/index/ai-agent`) uses a dedicated conversation API with history sidebar, multi-turn chat, image upload, web search toggle, and file upload. On mobile, the sidebar is replaced with an ActionSheet triggered by a "历史" button.
+
 ### Admin views
 
 Admin pages in `views/admin/` use a common layout (`AdminView.vue`) with sidebar navigation. Sub-sections:
 - `UserAdmin.vue` — user list with search, edit dialog, ban/unban, password reset
 - `EmailAdmin.vue` — email send records, resend capability
 - `ForumAdmin.vue` — tabs for topic management (`ForumTopicAdmin`), type management (`ForumTopicTypeAdmin`), and prohibited words (`ForumTopicProhibitedAdmin`)
+
+On mobile, AdminView renders a simplified layout with NavBar + no sidebar, keeping the admin sub-pages functional.

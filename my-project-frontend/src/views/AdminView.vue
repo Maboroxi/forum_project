@@ -8,6 +8,7 @@ import {
 } from "@element-plus/icons-vue";
 import UserInfo from "@/components/UserInfo.vue";
 import {inject, onMounted, ref} from "vue";
+import { isMobile } from "@/utils/device";
 import logoSvg from "@/assets/logo.svg";
 import router from "@/router";
 import {useRoute} from "vue-router";
@@ -66,11 +67,24 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="admin-content" v-loading="loading" element-loading-text="正在进入，请稍后...">
+    <!-- 移动端：简化管理视图 -->
+    <div v-if="isMobile" class="mobile-admin">
+        <van-nav-bar title="管理后台" left-text="返回" left-arrow @click-left="$router.push('/index')" fixed placeholder/>
+        <div class="mobile-admin-content">
+            <router-view v-slot="{ Component }">
+                <keep-alive>
+                    <component :is="Component"/>
+                </keep-alive>
+            </router-view>
+        </div>
+    </div>
+    <!-- 桌面端：完整管理布局 -->
+    <div v-else class="admin-content" v-loading="loading" element-loading-text="正在进入，请稍后...">
         <el-container style="height: 100%">
             <el-aside width="230px" class="admin-content-aside">
                 <div class="logo-box">
                     <el-image class="logo" :src="logoSvg"/>
+                    <span class="site-title">北梨论坛</span>
                 </div>
                 <el-scrollbar style="height: calc(100vh - 57px)">
                     <el-menu
@@ -137,12 +151,22 @@ onMounted(() => {
         border-right: solid 1px var(--el-border-color);
 
         .logo-box {
-            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
             padding: 15px 0 10px;
             height: 32px;
 
             .logo {
                 height: 32px;
+            }
+
+            .site-title {
+                font-size: 18px;
+                font-weight: 700;
+                color: var(--el-text-color-primary);
+                white-space: nowrap;
             }
         }
     }

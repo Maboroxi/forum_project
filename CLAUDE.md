@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 forum-jwt/
 ├── my-project-backend/         # 旧单体应用 (Spring Boot 3.5.8 + Java 17) — 已弃用，请使用微服务
-├── my-project-frontend/        # Vue 3 + Vite + Element Plus (见其自身 CLAUDE.md)
+├── my-project-frontend/        # Vue 3 + Vite + Element Plus + Vant 4 (见其自身 CLAUDE.md)
 ├── gateway-service/            # Spring Cloud Gateway (port 8081) — 统一入口
 ├── user-service/               # 用户认证、管理 API
 ├── forum-service/              # 帖子 CRUD、ES 搜索、评论、点赞/收藏
@@ -117,6 +117,39 @@ Vue 3 SPA ──HTTP/JWT──▶ Spring Cloud Gateway (port 8081)
 ### 帖子内容格式
 
 帖子/评论存储为 **Quill Delta JSON**。预览文本取前 300 字符。敏感词检查 (`ProhibitedUtils`) 扫描 Delta JSON 和纯文本。
+
+## Mobile Adaptation
+
+前端已做移动端适配（响应式 Web），在 **768px** 断点切换桌面/移动布局。
+
+### 移动端技术选型
+
+- **Vant 4** — 移动端 UI 组件库，与 Element Plus 共存
+- **设备检测** — `src/utils/device.js` 提供响应式 `isMobile` ref
+- **自适应布局** — 桌面用 Element Plus 侧边栏布局，移动端用 Vant TabBar 底部导航
+
+### 移动端组件文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/layouts/MobileLayout.vue` | 移动端主布局（NavBar + TabBar + 通知面板） |
+| `src/views/mobile/MobileTopicList.vue` | 移动端帖子列表（下拉刷新、横向分类、无限滚动） |
+| `src/views/mobile/MobileTopicDetail.vue` | 移动端帖子详情（全宽阅读 + 底部操作栏） |
+| `src/utils/device.js` | `isMobile` ref + 窗口 resize 监听 |
+
+### 响应式实现方式
+
+App.vue 检测 `isMobile`，移动端整体包裹 `<MobileLayout>`，提供 NavBar 和 TabBar。各页面组件在模板层用 `v-if="isMobile"` 切换桌面/移动端渲染分支：
+
+- **列表页** → 桌面侧边栏双列 / 移动端单列卡片流
+- **详情页** → 桌面左右双栏 / 移动端全宽 + 底部固定操作栏
+- **登录注册** → 桌面背景图双栏 / 移动端渐变色全屏 + 白色表单卡片
+- **管理后台** → 桌面侧边栏标签页 / 移动端简化视图
+- **AI 聊天** → 桌面历史侧栏 / 移动端底部滑出 ActionSheet 切换对话
+
+### PWA 支持
+
+`vite-plugin-pwa` 已配置（manifest、图标），需 Node 20+ 启用（当前 Node 18 与 Workbox terser 不兼容）。
 
 ## Commands
 

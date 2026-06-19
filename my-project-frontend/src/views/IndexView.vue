@@ -1,5 +1,6 @@
 <script setup>
 import {inject, reactive, ref} from "vue";
+import { isMobile } from "@/utils/device";
 import logoSvg from "@/assets/logo.svg";
 import {
     Bell,
@@ -85,12 +86,24 @@ apiForumTypes(data => {
 </script>
 
 <template>
-    <div class="main-content" v-loading="loading" element-loading-text="正在进入，请稍后...">
+    <!-- 移动端：只渲染内容，外壳由 MobileLayout 提供 -->
+    <div v-if="isMobile" class="mobile-index-view">
+        <router-view v-slot="{ Component }">
+            <transition name="el-fade-in-linear" mode="out-in">
+                <keep-alive include="TopicList">
+                    <component :is="Component"/>
+                </keep-alive>
+            </transition>
+        </router-view>
+    </div>
+    <!-- 桌面端：完整布局 -->
+    <div v-else class="main-content" v-loading="loading" element-loading-text="正在进入，请稍后...">
         <ai-chat-window/>
         <el-container style="height: 100%" v-if="!loading">
             <el-header class="main-content-header">
-                <div style="width: 320px;height: 32px">
+                <div class="header-logo">
                     <el-image class="logo" :src="logoSvg"/>
+                    <span class="site-title">北梨论坛</span>
                 </div>
                 <div style="flex: 1;padding: 0 20px;text-align: center">
                     <el-autocomplete v-model="searchInput.text" style="width: 100%;max-width: 500px"
@@ -273,8 +286,23 @@ apiForumTypes(data => {
     align-items: center;
     box-sizing: border-box;
 
-    .logo {
+    .header-logo {
+        width: 320px;
         height: 32px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+
+        .logo {
+            height: 32px;
+        }
+
+        .site-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--el-text-color-primary);
+            white-space: nowrap;
+        }
     }
 
     .user-info {
