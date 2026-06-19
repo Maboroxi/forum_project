@@ -1,4 +1,4 @@
-# Project Index: IT百马论坛 (itbaima-forum-jwt)
+# Project Index: 校园论坛 (forum-jwt)
 
 生成时间: 2026-06-16
 
