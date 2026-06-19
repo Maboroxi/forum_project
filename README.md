@@ -37,11 +37,32 @@
 
 ## 快速启动
 
-```bash
-# 1. 启动基础设施 (Nacos + MySQL + Redis + ES + RabbitMQ + MinIO + 可观测性)
-cd docker && bash setup.sh
+### 1. 配置 API 密钥
 
-# 2. 按依赖顺序启动微服务（各开一个终端）
+各微服务通过自身目录下的 `.env` 文件加载密钥（已配置 `.gitignore`，不会提交）。首次使用请确认以下 `.env` 文件已创建：
+
+| 服务 | 必需密钥 | 参考模板 |
+|------|---------|---------|
+| `user-service/.env` | `STMP_EMAIL`, `STMP_EMAIL_PASSWORD`, `JWT_KEY` | `my-project-backend/.env.properties` |
+| `ai-service/.env` | `DEEPSEEK_KEY`, `TAVILY_API_KEY`, `SILICONFLOW_API_KEY` | 同上 |
+| `forum-service/.env` | `WEATHER_KEY` | 同上 |
+| `oss-service/.env` | `INTERNAL_SERVICE_TOKEN`（可选） | — |
+| `notification-service/.env` | `INTERNAL_SERVICE_TOKEN`（可选） | — |
+| `announcement-service/.env` | `INTERNAL_SERVICE_TOKEN`（可选） | — |
+
+> **gateway-service** 不支持 `.env` 文件，需要 `JWT_KEY` 时通过系统环境变量设置。
+
+也可以直接参考根目录 `.env.example` 了解所有可用环境变量。
+
+### 2. 启动基础设施
+
+```bash
+cd docker && bash setup.sh
+```
+
+### 3. 启动微服务（各开一个终端）
+
+```bash
 cd gateway-service       && mvn spring-boot:run   # 端口 8081（统一入口）
 cd user-service          && mvn spring-boot:run   # 端口 8082
 cd forum-service         && mvn spring-boot:run   # 端口 8088
@@ -49,8 +70,11 @@ cd notification-service  && mvn spring-boot:run   # 端口 8085
 cd ai-service            && mvn spring-boot:run   # 端口 8083
 cd oss-service           && mvn spring-boot:run   # 端口 8084
 cd announcement-service  && mvn spring-boot:run   # 端口 8086
+```
 
-# 3. 启动前端
+### 4. 启动前端
+
+```bash
 cd my-project-frontend && npm install && npm run dev
 ```
 
