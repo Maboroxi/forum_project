@@ -242,6 +242,33 @@ CREATE TABLE `db_topic_draft` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- ----------------------------
+-- Table structure for db_announcement
+-- ----------------------------
+DROP TABLE IF EXISTS `db_announcement`;
+CREATE TABLE `db_announcement` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `uid` int NOT NULL COMMENT '发布者ID',
+  `title` varchar(100) NOT NULL COMMENT '公告标题',
+  `summary` varchar(300) DEFAULT NULL COMMENT '公告摘要',
+  `content` text COMMENT '公告内容',
+  `published` tinyint DEFAULT '0' COMMENT '是否发布',
+  `top` tinyint DEFAULT '0' COMMENT '是否置顶',
+  `create_time` datetime NOT NULL COMMENT '创建时间',
+  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
+  `publish_time` datetime DEFAULT NULL COMMENT '发布时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_announcement_published` (`published`, `top`, `publish_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- ----------------------------
+-- Records of db_announcement
+-- ----------------------------
+BEGIN;
+INSERT INTO `db_announcement` (`id`, `uid`, `title`, `summary`, `content`, `published`, `top`, `create_time`, `update_time`, `publish_time`) VALUES
+(1, 1, '校园论坛正式上线', '欢迎各位同学使用校园论坛！', '{"ops":[{"insert":"欢迎各位同学使用校园论坛！在这里你可以发布帖子、参与讨论、获取最新校园资讯。\\n"}]}', 1, 1, '2026-06-01 09:00:00', '2026-06-01 09:00:00', '2026-06-01 09:00:00');
+COMMIT;
+
+-- ----------------------------
 -- Records of db_topic
 -- ----------------------------
 BEGIN;

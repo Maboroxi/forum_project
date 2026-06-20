@@ -1,26 +1,173 @@
-# 前后端分离项目（JWT方案）
-采用SpringBoot3 + Vue3编写的前后端分离模版项目，集成多种技术栈，使用JWT校验方案。
-***
-### 后端功能与技术点
-用户注册、用户登录、重置密码等基础功能以及对应接口
-* 采用Mybatis-Plus作为持久层框架，使用更便捷
-* 采用Redis存储注册/重置操作验证码，带过期时间控制
-* 采用RabbitMQ积压短信发送任务，再由监听器统一处理
-* 采用SpringSecurity作为权限校验框架，手动整合Jwt校验方案
-* 采用Redis进行IP地址限流处理，防刷接口
-* 视图层对象和数据层对象分离，编写工具方法利用反射快速互相转换
-* 错误和异常页面统一采用JSON格式返回，前端处理响应更统一
-* 手动处理跨域，采用过滤器实现
-* 使用Swagger作为接口文档自动生成，已自动配置登录相关接口
-* 采用过滤器实现对所有请求自动生成雪花ID方便线上定位问题
-* 针对于多环境进行处理，开发环境和生产环境采用不同的配置
-* 日志中包含单次请求完整信息以及对应的雪花ID，支持文件记录
-* 项目整体结构清晰，职责明确，注释全面，开箱即用
+# 论坛项目 — 校园论坛 (forum-jwt)
 
-### 前端功能与技术点
-用户注册、用户登录、重置密码等界面，以及一个简易的主页
-* 采用Vue-Router作为路由
-* 采用Axios作为异步请求框架
-* 采用Element-Plus作为UI组件库
-* 使用VueUse适配深色模式切换
-* 使用unplugin-auto-import按需引入，减少打包后体积
+采用 Spring Cloud Alibaba 微服务架构 + Vue 3 的前后端分离论坛系统，支持 JWT 认证、Elasticsearch 全文搜索、DeepSeek AI 聊天助手、Grafana 可观测性栈。
+
+***
+
+## 技术栈
+
+### 后端
+| 技术 | 版本 |
+|------|------|
+| Spring Boot | 3.5.8 |
+| Spring Cloud | 2025.0.0 |
+| Spring Cloud Alibaba | 2025.0.0.0 |
+| Java | 17 (Eclipse Adoptium) |
+| MyBatis-Plus | 3.5.15 |
+| Spring Security | 6.x |
+| JWT (java-jwt) | 4.3 |
+| Spring AI | 1.1.2 (DeepSeek) |
+| Elasticsearch | 8.18.8 |
+| RabbitMQ | 3.12 |
+| MinIO | latest |
+| Nacos | 2.3.2 |
+| Micrometer + OpenTelemetry | 可观测性 |
+
+### 前端
+| 技术 | 版本 |
+|------|------|
+| Vue 3 | 3.3+ |
+| Vite | 4 |
+| Vue Router | 4 |
+| Pinia | 2 |
+| Element Plus | 2.11 |
+| Axios | 1.4 |
+| Quill Editor | (富文本) |
+| markdown-it | 14 |
+
+## 快速启动
+
+### 1. 配置 API 密钥
+
+各微服务通过自身目录下的 `.env.properties` 文件加载密钥（已配置 `.gitignore`，不会提交）。首次使用请确认以下文件已创建：
+
+| 服务 | 必需密钥 | 参考模板 |
+|------|---------|---------|
+| `user-service/.env.properties` | `STMP_EMAIL`, `STMP_EMAIL_PASSWORD`, `JWT_KEY` | `my-project-backend/.env.properties` |
+| `ai-service/.env.properties` | `DEEPSEEK_KEY`, `TAVILY_API_KEY`, `SILICONFLOW_API_KEY` | 同上 |
+| `forum-service/.env.properties` | `WEATHER_KEY` | 同上 |
+| `oss-service/.env.properties` | `INTERNAL_SERVICE_TOKEN`（可选） | — |
+| `notification-service/.env.properties` | `INTERNAL_SERVICE_TOKEN`（可选） | — |
+| `announcement-service/.env.properties` | `INTERNAL_SERVICE_TOKEN`（可选） | — |
+
+> **gateway-service** 不支持 `.env` 文件，需要 `JWT_KEY` 时通过系统环境变量设置。
+
+也可以直接参考根目录 `.env.example` 了解所有可用环境变量。
+
+### 2. 启动基础设施
+
+```bash
+cd docker && bash setup.sh
+```
+
+### 3. 启动微服务（各开一个终端）
+
+```bash
+cd gateway-service       && mvn spring-boot:run   # 端口 8081（统一入口）
+cd user-service          && mvn spring-boot:run   # 端口 8082
+cd forum-service         && mvn spring-boot:run   # 端口 8088
+cd notification-service  && mvn spring-boot:run   # 端口 8085
+cd ai-service            && mvn spring-boot:run   # 端口 8083
+cd oss-service           && mvn spring-boot:run   # 端口 8084
+cd announcement-service  && mvn spring-boot:run   # 端口 8086
+```
+
+### 4. 启动前端
+
+```bash
+cd my-project-frontend && npm install && npm run dev
+```
+
+访问 `http://localhost:5173`，API 统一经网关 `http://localhost:8081` 路由。
+
+> 默认管理员账号：`test` / `123456`，普通用户：`user` / `123456`
+
+## 微服务架构
+
+```
+Vue 3 SPA ──HTTP/JWT──▶ Spring Cloud Gateway (port 8081)
+                            │
+                ┌───────────┼───────────┬──────────────┐
+                ▼           ▼           ▼              ▼
+          user-service   forum-svc  ai-service       ...
+           (认证/用户)    (帖子/搜索)  (DeepSeek AI)
+                │           │           │
+                ▼           ▼           ▼
+          Nacos(注册中心) / MySQL / Redis / ES / RabbitMQ / MinIO
+                │
+                ▼
+          Loki + Tempo + Prometheus + Grafana (可观测性)
+```
+
+### 服务说明
+
+| 模块 | 端口 | 职责 |
+|------|------|------|
+| `gateway-service` | 8081 | Spring Cloud Gateway 统一入口，JWT 校验，路由分发 |
+| `user-service` | 8082 | 用户注册/登录/重置密码、用户管理、邮件记录管理 |
+| `forum-service` | 8088 | 帖子 CRUD、ES 搜索、评论、点赞/收藏、公告查询 |
+| `notification-service` | 8085 | RabbitMQ 消费，异步邮件发送（3 次重试 → 死信队列） |
+| `ai-service` | 8083 | DeepSeek AI 聊天（SSE 流式）、Tavily 搜索工具、论坛 RAG |
+| `oss-service` | 8084 | MinIO 对象存储，图片/文件上传与访问 |
+| `announcement-service` | 8086 | 公告管理 |
+| `common-core` | — | 共享 DTO、工具类、JWT 工具 |
+| `common-observability` | — | Micrometer + OTLP 统一可观测性配置 |
+
+## 核心功能
+
+- 用户注册、登录、重置密码（邮件验证码）
+- 论坛帖子发布、编辑、分页浏览、按类型筛选
+- 帖子置顶 / 锁定 / 隐藏（管理员）
+- 帖子评论（Quill 富文本）
+- 帖子全文搜索（Elasticsearch）
+- 点赞 / 收藏（Redis 缓冲 + MySQL 定时刷入）
+- AI 聊天助手（DeepSeek，支持论坛数据搜索的 RAG 工具调用）
+- 用户资料管理、隐私设置、深色模式
+- 管理员后台：用户管理、邮件记录、帖子管理、类型管理、敏感词管理
+- 公告发布与管理
+- 请求限流（Redis 计数器，全局 + 功能级）
+- 文件上传（MinIO 对象存储）
+
+## 项目结构
+
+```
+├── gateway-service/              # API 网关
+├── user-service/                 # 用户服务
+├── forum-service/                # 论坛服务
+├── ai-service/                   # AI 聊天服务
+├── oss-service/                  # 对象存储服务
+├── notification-service/         # 通知服务（邮件）
+├── announcement-service/         # 公告服务
+├── common-core/                  # 公共模块
+├── common-observability/         # 可观测性公共配置
+├── my-project-backend/           # 【已弃用】旧单体版
+├── my-project-frontend/          # Vue 3 前端
+├── docker/                       # Docker Compose + 可观测性配置
+│   └── observability/            # Loki/Tempo/Alloy/Prometheus/Grafana
+├── study.sql                     # 数据库 Schema + 种子数据
+└── prohibited.json               # 敏感词黑名单
+```
+
+## Docker 基础设施
+
+详见 [docker/setup.sh](docker/setup.sh)，一键启动所有服务：
+
+```bash
+cd docker && bash setup.sh
+```
+
+| 服务 | 端口 | 认证 |
+|------|------|------|
+| Nacos | 8848 (控制台/API)、9848/9849 (gRPC) | 开发模式无认证 |
+| MySQL 8.0 | 3306 | root / 123456 |
+| Redis 7 | 6379 | 无密码 |
+| Elasticsearch 8.18.8 | 9200 | elastic / 123456 |
+| RabbitMQ 3.12 | 5672 / 15672(管理) | admin / admin |
+| MinIO | 9000 / 9001(管理) | minio / password |
+| Grafana | 3000 | admin / 环境变量配置 |
+| Prometheus | 9090 | — |
+| Loki | 3100 | — |
+| Tempo | 3200 | — |
+| Alloy | 12345 / 4317(gRPC) / 4318(HTTP) | — |
+
+> MinIO 需手动创建 bucket `study`: 访问 http://localhost:9001

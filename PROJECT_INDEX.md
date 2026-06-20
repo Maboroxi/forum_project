@@ -1,4 +1,4 @@
-# Project Index: IT百马论坛 (itbaima-forum-jwt)
+# Project Index: 校园论坛 (forum-jwt)
 
 生成时间: 2026-06-16
 
@@ -119,7 +119,7 @@ cd my-project-frontend && npm run dev
 
 | 服务 | 端口 | 账号/密码 |
 |------|------|----------|
-| MySQL 8.0 | 3600→3306 | root / 123456 |
+| MySQL 8.0 | 3306 | root / 123456 |
 | Redis 7 | 6379 | (无密码) |
 | Elasticsearch 8.11 | 9200 (HTTPS) | elastic / 123456 |
 | RabbitMQ 3.12 | 5672 / 15672 | admin / admin |

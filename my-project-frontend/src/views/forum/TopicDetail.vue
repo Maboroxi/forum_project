@@ -1,6 +1,8 @@
 <script setup>
 import {useRoute} from "vue-router";
 import {reactive, ref} from "vue";
+import { isMobile } from "@/utils/device";
+import MobileTopicDetail from "@/views/mobile/MobileTopicDetail.vue";
 import {
     ArrowLeft,
     ChatSquare,
@@ -100,7 +102,10 @@ function deleteComment(id) {
 </script>
 
 <template>
-    <div class="topic-page" v-if="topic.data">
+    <!-- 移动端（MobileTopicDetail 自己负责加载数据） -->
+    <MobileTopicDetail v-if="isMobile" />
+    <!-- 桌面端 -->
+    <div v-else-if="topic.data" class="topic-page">
         <div class="topic-main" style="position: sticky;top: 0;z-index: 10">
             <card style="display: flex;width: 100%;">
                 <el-button :icon="ArrowLeft" type="info" size="small"

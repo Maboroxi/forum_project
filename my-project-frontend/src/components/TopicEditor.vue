@@ -11,6 +11,7 @@ import {ElMessage} from "element-plus";
 import ColorDot from "@/components/ColorDot.vue";
 import {useStore} from "@/store";
 import {apiForumTopicCreate, apiForumTopicDraftDelete, apiForumTopicDraftSave} from "@/net/api/forum";
+import { isMobile } from "@/utils/device";
 
 const store = useStore()
 
@@ -90,6 +91,8 @@ function deltaToText(delta) {
 
 const contentLength = computed(() => deltaToText(editor.text).length)
 const editorTitle = computed(() => props.draftable && currentDraftId.value ? '编辑帖子草稿' : '发表新的帖子')
+const editorHeight = computed(() => isMobile.value ? 220 : 440)
+const drawerSize = computed(() => isMobile.value ? '90vh' : 650)
 
 function findTypeById(id){
     for (let type of store.forum.types) {
@@ -196,7 +199,7 @@ const editorOption = {
              direction="btt"
              @open="initEditor"
              :close-on-click-modal="false"
-             :size="650"
+             :size="drawerSize"
              @close="emit('close')">
     <template #header>
       <div>
@@ -224,7 +227,7 @@ const editorOption = {
       <color-dot :color="editor.type ? editor.type.color : '#dedede'"/>
       <span style="margin-left: 5px">{{editor.type ? editor.type.desc : '请在上方选择一个帖子类型'}}</span>
     </div>
-    <div style="margin-top: 10px;height: 440px;overflow: hidden;border-radius: 5px"
+    <div :style="{ marginTop: '10px', height: editorHeight + 'px', overflow: 'hidden', borderRadius: '5px' }"
          v-loading="editor.uploading"
          element-loading-text="这种上传图片，请稍后...">
       <quill-editor v-model:content="editor.text" style="height: calc(100% - 45px)"
@@ -248,6 +251,12 @@ const editorOption = {
     width: 800px;
     margin: auto;
     border-radius: 10px 10px 0 0;
+}
+
+@media (max-width: 768px) {
+    :deep(.topic-editor-drawer) {
+        width: 100% !important;
+    }
 }
 :deep(.topic-editor-drawer .el-drawer__header) {
     margin: 0;

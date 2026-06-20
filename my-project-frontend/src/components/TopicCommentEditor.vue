@@ -1,9 +1,10 @@
 <script setup>
 import {Delta, QuillEditor} from "@vueup/vue-quill";
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
-import {ref} from "vue";
+import {computed, ref} from "vue";
 import {ElMessage} from "element-plus";
 import {apiForumCommentSubmit} from "@/net/api/forum";
+import { isMobile } from "@/utils/device";
 
 const props = defineProps({
     show: Boolean,
@@ -53,7 +54,7 @@ function deltaToText(delta) {
         <el-drawer :model-value="show"
                    :title="quote ? `发表对评论: ${deltaToSimpleText(quote.content)} 的回复` : '发表帖子回复'"
                    @open="init" @close="emit('close')"
-                   direction="btt" :size="270"
+                   direction="btt" :size="isMobile ? '60vh' : 270"
                    :close-on-click-modal="false">
             <div>
                 <div>
@@ -82,5 +83,13 @@ function deltaToText(delta) {
 }
 :deep(.el-drawer__body) {
     padding: 10px;
+}
+
+@media (max-width: 768px) {
+    :deep(.el-drawer) {
+        width: 100% !important;
+        margin: 0 auto;
+        border-radius: 0;
+    }
 }
 </style>

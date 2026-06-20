@@ -1,8 +1,31 @@
 <template>
   <div style="height: 100%;">
   <div class="ai-agent-container">
-    <!-- 左侧历史对话栏 -->
-    <div class="history-sidebar">
+    <!-- 移动端：历史对话入口 -->
+    <van-button v-if="isMobile" icon="bars" size="small" plain type="primary"
+                class="mobile-history-btn" @click="showHistoryPop = true">
+      历史
+    </van-button>
+    <van-action-sheet v-model:show="showHistoryPop" title="历史对话">
+      <div class="mobile-history-body">
+        <van-button size="small" type="primary" icon="plus" block
+                    @click="showHistoryPop=false;createNewConversation()" style="margin-bottom:8px">
+          新对话
+        </van-button>
+        <div v-for="conv in conversations" :key="conv.id"
+             :class="['mobile-history-item', { active: activeConversationId === conv.id }]"
+             @click="showHistoryPop=false;switchConversation(conv.id)">
+          <van-icon name="chat-o" />
+          <span class="mobile-hist-title">{{ conv.title }}</span>
+          <van-icon v-if="activeConversationId === conv.id" name="delete-o"
+                    @click.stop="deleteConversation(conv.id)" />
+        </div>
+        <van-empty v-if="conversations.length === 0" description="暂无对话" />
+      </div>
+    </van-action-sheet>
+
+    <!-- 桌面端：左侧历史对话栏 -->
+    <div v-if="!isMobile" class="history-sidebar">
       <div class="history-header">
         <el-button type="primary" @click="createNewConversation" :icon="Plus" size="large">
           新对话
@@ -19,10 +42,7 @@
             <span class="title-text">{{ conv.title }}</span>
           </div>
           <el-button v-if="activeConversationId === conv.id"
-                     text
-                     type="danger"
-                     size="small"
-                     :icon="Delete"
+                     text type="danger" size="small" :icon="Delete"
                      @click.stop="deleteConversation(conv.id)" />
         </div>
         <div v-if="conversations.length === 0" class="empty-history">
@@ -31,7 +51,7 @@
       </el-scrollbar>
     </div>
 
-    <!-- 右侧聊天区 -->
+    <!-- 聊天区 -->
     <div class="chat-area">
       <div class="messages-container" ref="messagesRef" v-loading="switchLoading" element-loading-text="切换中...">
         <div v-if="messages.length === 0" class="welcome-placeholder">
@@ -131,6 +151,7 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { useStore } from '@/store'
+import { isMobile } from '@/utils/device'
 import { Plus, Delete, ChatDotSquare, Promotion, Picture, Document, Close } from '@element-plus/icons-vue'
 import MarkdownIt from 'markdown-it'
 import {
@@ -148,6 +169,7 @@ import axios from 'axios'
 const md = new MarkdownIt({ html: true })
 const store = useStore()
 
+const showHistoryPop = ref(false)
 const conversations = ref([])
 const activeConversationId = ref(null)
 const messages = ref([])
@@ -750,4 +772,96 @@ function scrollToBottom() {
 .markdown-body p { margin: 0 0 8px; }
 .markdown-body p:last-child { margin: 0; }
 .image-preview-dialog .el-dialog__body { padding: 0; }
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .ai-agent-container {
+    min-height: calc(100vh - 100px);
+    max-height: calc(100vh - 100px);
+  }
+
+  .messages-container {
+    padding: 16px 12px !important;
+  }
+
+  .message-bubble {
+    max-width: 85% !important;
+    padding: 10px 14px !important;
+    font-size: 14px !important;
+  }
+
+  .input-area {
+    padding: 8px 12px !important;
+  }
+
+  .input-area .input-row .el-textarea :deep(textarea) {
+    padding: 8px 12px !important;
+    border-radius: 8px !important;
+  }
+
+  .welcome-placeholder .welcome-icon {
+    font-size: 40px !important;
+  }
+
+  .welcome-placeholder h2 {
+    font-size: 20px !important;
+  }
+
+  .welcome-placeholder .suggestions {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .welcome-placeholder .suggestions .el-tag {
+    width: 80%;
+    text-align: center;
+  }
+
+  .chat-image {
+    max-width: 120px !important;
+    max-height: 120px !important;
+  }
+}
+
+.mobile-history-btn {
+  position: fixed !important;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  font-size: 12px;
+  height: 32px;
+  padding: 0 8px;
+}
+
+.mobile-history-body {
+  padding: 12px 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.mobile-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.mobile-history-item:hover {
+  background: #f5f5f5;
+}
+
+.mobile-history-item.active {
+  background: #e8f4fd;
+  color: #1989fa;
+}
+
+.mobile-hist-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 </style>

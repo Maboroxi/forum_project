@@ -1,0 +1,100 @@
+@startuml
+' 北梨论坛 UML 用例图
+left to right direction
+title 北梨论坛 - 系统用例图
+
+' === 角色定义 ===
+actor "游客" as Guest
+actor "注册用户" as User
+actor "管理员" as Admin
+
+' === 用例定义 ===
+rectangle "公开功能" {
+  usecase "UC-01\n浏览帖子列表" as UC1
+  usecase "UC-02\n查看帖子详情" as UC2
+  usecase "UC-03\n搜索帖子" as UC3
+  usecase "UC-04\n查看公告" as UC4
+  usecase "UC-05\n用户注册" as UC5
+  usecase "UC-06\n用户登录" as UC6
+  usecase "UC-07\n密码重置" as UC7
+}
+
+rectangle "用户功能" {
+  usecase "UC-08\n创建帖子" as UC8
+  usecase "UC-09\n编辑帖子" as UC9
+  usecase "UC-10\n删除帖子" as UC10
+  usecase "UC-11\n发表评论" as UC11
+  usecase "UC-12\n引用回复" as UC12
+  usecase "UC-13\n点赞" as UC13
+  usecase "UC-14\n收藏" as UC14
+  usecase "UC-15\n管理个人资料" as UC15
+  usecase "UC-16\n用户登出" as UC16
+  usecase "UC-17\n查看通知" as UC17
+  usecase "UC-18\nAI 聊天" as UC18
+  usecase "UC-19\n上传文件" as UC19
+  usecase "UC-20\n保存草稿" as UC20
+}
+
+rectangle "管理功能" {
+  usecase "UC-21\n用户管理" as UC21
+  usecase "UC-22\n禁言用户" as UC22
+  usecase "UC-23\n封禁用户" as UC23
+  usecase "UC-24\n帖子置顶" as UC24
+  usecase "UC-25\n帖子锁定" as UC25
+  usecase "UC-26\n帖子屏蔽" as UC26
+  usecase "UC-27\n同步ES索引" as UC27
+  usecase "UC-28\n类型管理" as UC28
+  usecase "UC-29\n敏感词管理" as UC29
+  usecase "UC-30\n公告管理" as UC30
+  usecase "UC-31\n邮箱记录查询" as UC31
+}
+
+' === 角色与用例关系 ===
+Guest --> UC1
+Guest --> UC2
+Guest --> UC3
+Guest --> UC4
+Guest --> UC5
+Guest --> UC6
+Guest --> UC7
+
+User --> UC8
+User --> UC9
+User --> UC10
+User --> UC11
+User --> UC12
+User --> UC13
+User --> UC14
+User --> UC15
+User --> UC16
+User --> UC17
+User --> UC18
+User --> UC19
+User --> UC20
+
+Admin --> UC21
+Admin --> UC22
+Admin --> UC23
+Admin --> UC24
+Admin --> UC25
+Admin --> UC26
+Admin --> UC27
+Admin --> UC28
+Admin --> UC29
+Admin --> UC30
+Admin --> UC31
+
+' === include / extend 关系 ===
+UC4 <.. UC30 : <<extend>>
+UC5 ..> UC6 : <<include>>
+UC6 ..> UC16 : <<include>>
+UC8 ..> UC20 : <<extend>>
+UC9 ..> UC10 : <<include>>
+UC18 ..> UC27 : <<extend>>
+UC13 ..> UC17 : <<extend>>
+UC14 ..> UC17 : <<extend>>
+UC21 ..> UC22 : <<extend>>
+UC21 ..> UC23 : <<extend>>
+UC21 ..> UC27 : <<extend>>
+
+@enduml

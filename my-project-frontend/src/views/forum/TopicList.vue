@@ -1,5 +1,7 @@
 <script setup>
 import LightCard from "@/components/LightCard.vue";
+import { isMobile } from "@/utils/device";
+import MobileTopicList from "@/views/mobile/MobileTopicList.vue";
 import {
     Calendar,
     Clock,
@@ -16,6 +18,7 @@ import {
 } from "@element-plus/icons-vue";
 import Weather from "@/components/Weather.vue";
 import {computed, onMounted, reactive, ref, watch} from "vue";
+import { useRoute } from "vue-router";
 import {ElMessage, ElMessageBox} from "element-plus";
 import TopicEditor from "@/components/TopicEditor.vue";
 import {useStore} from "@/store";
@@ -35,6 +38,7 @@ import {apiAnnouncementLatest} from "@/net/api/announcement";
 import {clearTopicDrafts, listTopicDrafts, topicDraftSummary} from "@/utils/topicDraft";
 
 const store = useStore()
+const route = useRoute()
 
 const weather = reactive({
     location: {},
@@ -63,7 +67,20 @@ const draftEditor = reactive({
     content: ''
 })
 
+watch(() => store.forum.types, (types) => {
+    if(types?.length) {
+        // 加载类型后的额外处理
+    }
+}, { immediate: true })
+
 watch(() => topics.type, () => resetList(), {immediate: true})
+
+// 监听 ?createTopic=true 查询参数，打开编辑器
+watch(() => route.query.createTopic, (val) => {
+    if (val === 'true') {
+        openTopicEditor()
+    }
+})
 
 const today = computed(() => {
     const date = new Date()
@@ -209,7 +226,10 @@ onMounted(() => {
 </script>
 
 <template>
-    <div style="display: flex;margin: 20px auto;gap: 20px;max-width: 900px;padding: 0 20px">
+    <!-- 移动端 -->
+    <MobileTopicList v-if="isMobile"/>
+    <!-- 桌面端 -->
+    <div v-else style="display: flex;margin: 20px auto;gap: 20px;max-width: 900px;padding: 0 20px">
         <div style="flex: 1">
             <light-card>
                 <div class="create-topic" @click="openTopicEditor">
