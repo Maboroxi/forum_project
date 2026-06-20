@@ -1,0 +1,1097 @@
+# ========================================================================
+# Dify 应用配置文件 - 论坛智能客服
+# ========================================================================
+# 应用名称：论坛智能客服
+# 应用图标：🤖
+# 工作流模式：advanced-chat（高级对话模式）
+# 核心功能：基于 RAG（检索增强生成）的 Dify 产品知识问答
+# 
+# 【设计概览】
+# 本工作流采用经典的“检索-生成”架构，包含四个核心节点：
+#   1. 开始节点（Start）    - 接收用户输入
+#   2. 知识检索节点（Knowledge Retrieval） - 在知识库中搜索相关段落
+#   3. LLM 节点（LLM）      - 结合检索结果生成回答
+#   4. 回答节点（Answer）   - 输出最终回复
+# 
+# 除此之外，画布中还包含多个用于团队协作和运维参考的注释节点，
+# 以及若干未接入主流程的备用代码节点，方便后续功能扩展。
+# 这些额外的元素不会影响主流程的执行，仅作为开发辅助。
+# ========================================================================
+# 
+# 【YAML 结构说明】
+# 本文件遵循 Dify 工作流导出规范，顶级键包括：
+#   - app          : 应用基本信息
+#   - dependencies : 依赖的插件及版本
+#   - kind         : 应用类型（固定为 app）
+#   - version      : 配置文件版本
+#   - workflow     : 工作流主体，包含变量、功能开关、图结构等
+# 
+# 所有缩进使用两个空格，请勿混用制表符。
+# ========================================================================
+
+app:
+  description: ''
+  icon: 🤖
+  icon_background: '#D1E9FF'
+  icon_type: emoji
+  mode: advanced-chat
+  name: 论坛智能客服
+  use_icon_as_answer_icon: false
+
+# ========================================================================
+# 【依赖声明】本应用所需的外部模型插件
+# ========================================================================
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai:0.4.2@21195ee1321849e0a7d4b3f6b2fd8c2be23ea6c7182e1b444ecc4c1711b52468
+    version: null
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/volcengine:0.0.7@4aa6b536e688521c7496718ebd8782365f6808f8db139b7079044311a00ed13e
+    version: null
+
+# -------------------- 应用元数据 --------------------
+kind: app
+version: 0.6.0
+
+# ========================================================================
+# 【工作流主体】
+# ========================================================================
+workflow:
+
+  # ======================================================================
+  # 【会话级变量】（用于存储用户会话过程中的临时状态）
+  # 以下变量均已在系统中声明，但因未被任何节点引用，故不参与运行。
+  # 它们可供未来扩展功能时使用，例如多轮对话中的上下文传递。
+  # ======================================================================
+  conversation_variables:
+    - name: session_id
+      type: string
+      default: ''
+      description: 当前会话的唯一标识符，用于追踪用户请求。
+    - name: user_language
+      type: string
+      default: 'zh-CN'
+      description: 用户偏好的语言代码，影响回答语种。
+    - name: query_timestamp
+      type: number
+      default: 0
+      description: 用户提问的时间戳，用于日志分析。
+    - name: intent_category
+      type: string
+      default: 'general'
+      description: 用户意图分类（如产品咨询、技术支持等）。
+    - name: confidence_score
+      type: number
+      default: 0.0
+      description: 知识检索结果的置信度评分。
+    - name: fallback_flag
+      type: string
+      default: 'false'
+      description: 标记是否触发了兜底回复逻辑。
+    - name: retry_count
+      type: number
+      default: 0
+      description: 当前会话中用户重复提问的次数。
+    - name: last_answer
+      type: string
+      default: ''
+      description: 上一次回答的摘要，用于对话历史记忆。
+    - name: user_agent
+      type: string
+      default: 'unknown'
+      description: 用户客户端的 User-Agent 信息。
+    - name: ip_region
+      type: string
+      default: 'default'
+      description: 用户 IP 所属地域，用于本地化运营。
+    - name: feedback_sentiment
+      type: string
+      default: 'neutral'
+      description: 用户反馈的情感倾向（正面/中性/负面）。
+    - name: knowledge_base_version
+      type: string
+      default: 'v1.0'
+      description: 当前使用的知识库版本号。
+    - name: model_response_time
+      type: number
+      default: 0
+      description: LLM 响应的耗时（毫秒）。
+    - name: is_authenticated
+      type: string
+      default: 'false'
+      description: 用户是否已登录认证。
+    - name: user_role
+      type: string
+      default: 'guest'
+      description: 用户角色（游客/会员/管理员）。
+    - name: preferred_model
+      type: string
+      default: 'doubao-seed'
+      description: 用户偏好的模型名称（可配置切换）。
+    - name: enable_debug_log
+      type: string
+      default: 'false'
+      description: 是否开启调试日志输出。
+    - name: test_flag_alpha
+      type: string
+      default: 'off'
+      description: 用于 A/B 测试的功能开关 A。
+    - name: test_flag_beta
+      type: string
+      default: 'off'
+      description: 用于 A/B 测试的功能开关 B。
+    - name: test_flag_gamma
+      type: string
+      default: 'off'
+      description: 用于 A/B 测试的功能开关 C。
+    - name: context_window_size
+      type: number
+      default: 5
+      description: 对话上下文保留的轮数。
+    - name: max_answer_length
+      type: number
+      default: 512
+      description: 回答最大长度（token 数）。
+    - name: temperature_override
+      type: number
+      default: -1
+      description: 临时覆盖 temperature 参数（-1 表示使用默认）。
+    - name: top_p_override
+      type: number
+      default: -1
+      description: 临时覆盖 top_p 参数。
+    - name: rerank_enabled
+      type: string
+      default: 'false'
+      description: 是否启用重排序（Rerank）功能。
+    - name: search_strategy
+      type: string
+      default: 'hybrid'
+      description: 检索策略（hybrid/keyword/vector）。
+    - name: chunk_size
+      type: number
+      default: 512
+      description: 知识库文档分段大小。
+    - name: overlap_tokens
+      type: number
+      default: 50
+      description: 分段重叠 token 数。
+    - name: embedding_model
+      type: string
+      default: 'text-embedding-3-small'
+      description: 向量化模型名称。
+    - name: retrieval_top_k
+      type: number
+      default: 3
+      description: 检索返回的最大段落数。
+    - name: similarity_threshold
+      type: number
+      default: 0.7
+      description: 相似度阈值，低于此值的结果将被过滤。
+    - name: prompt_template_version
+      type: string
+      default: 'v2.3'
+      description: 当前使用的提示词模板版本。
+    - name: response_format
+      type: string
+      default: 'text'
+      description: 回答格式（text/markdown/json）。
+    - name: enable_citation
+      type: string
+      default: 'false'
+      description: 是否在回答中引用来源。
+    - name: citation_style
+      type: string
+      default: 'footnote'
+      description: 引用样式（footnote/bracket）。
+    - name: log_level
+      type: string
+      default: 'info'
+      description: 日志记录级别（debug/info/warning/error）。
+    - name: metrics_enabled
+      type: string
+      default: 'false'
+      description: 是否收集性能指标。
+    - name: cache_ttl
+      type: number
+      default: 3600
+      description: 检索结果缓存有效期（秒）。
+    - name: fallback_response
+      type: string
+      default: '抱歉，我暂时无法回答这个问题，请换种方式提问。'
+      description: 兜底回复模板。
+    - name: greeting_enabled
+      type: string
+      default: 'true'
+      description: 是否启用开场白。
+    - name: suggested_questions_enabled
+      type: string
+      default: 'false'
+      description: 是否自动生成建议问题。
+    - name: user_feedback
+      type: object
+      default: {}
+      description: 用户对回答的反馈（点赞/点踩）。
+    - name: conversation_summary
+      type: string
+      default: ''
+      description: 当前对话的摘要。
+    - name: handoff_flag
+      type: string
+      default: 'false'
+      description: 标记是否转接人工客服。
+
+  # ======================================================================
+  # 【环境变量】（系统级配置，通常用于敏感信息或全局参数）
+  # 以下变量均未在任何节点中使用，仅为后续集成预留。
+  # ======================================================================
+  environment_variables:
+    - name: OPENAI_API_KEY
+      type: string
+      value: 'sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    - name: VOLC_ACCESS_KEY
+      type: string
+      value: 'ak-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    - name: VOLC_SECRET_KEY
+      type: string
+      value: 'sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    - name: KNOWLEDGE_BASE_ID
+      type: string
+      value: 'kb-default-001'
+    - name: DEFAULT_MODEL
+      type: string
+      value: 'doubao-seed-2-0-code-preview-260215'
+    - name: FALLBACK_MODEL
+      type: string
+      value: 'gpt-3.5-turbo'
+    - name: MAX_RETRIES
+      type: number
+      value: 3
+    - name: TIMEOUT_SECONDS
+      type: number
+      value: 30
+    - name: LOG_LEVEL
+      type: string
+      value: 'info'
+    - name: ENABLE_CACHE
+      type: string
+      value: 'true'
+    - name: CACHE_REDIS_URL
+      type: string
+      value: 'redis://localhost:6379/0'
+    - name: MONITOR_ENDPOINT
+      type: string
+      value: 'https://monitor.example.com/api'
+    - name: FEATURE_FLAG_A
+      type: string
+      value: 'enabled'
+    - name: FEATURE_FLAG_B
+      type: string
+      value: 'disabled'
+    - name: FEATURE_FLAG_C
+      type: string
+      value: 'experimental'
+    - name: DEFAULT_LANGUAGE
+      type: string
+      value: 'zh-CN'
+    - name: TIMEZONE
+      type: string
+      value: 'Asia/Shanghai'
+    - name: RAG_RERANK_MODEL
+      type: string
+      value: 'cross-encoder/ms-marco-MiniLM-L-6-v2'
+    - name: RAG_RERANK_THRESHOLD
+      type: number
+      value: 0.5
+    - name: RAG_MAX_CHUNKS
+      type: number
+      value: 10
+    - name: EMBEDDING_BATCH_SIZE
+      type: number
+      value: 32
+    - name: PROMPT_CACHE_TTL
+      type: number
+      value: 86400
+    - name: SENSITIVE_WORDS_FILE
+      type: string
+      value: '/etc/dify/sensitive_words.txt'
+    - name: ENABLE_SPEECH
+      type: string
+      value: 'false'
+    - name: SPEECH_VOICE
+      type: string
+      value: 'default'
+    - name: ENABLE_IMAGE_UPLOAD
+      type: string
+      value: 'false'
+    - name: MAX_IMAGE_SIZE
+      type: number
+      value: 10
+    - name: ALLOWED_IMAGE_TYPES
+      type: string
+      value: 'jpg,png,gif'
+    - name: RETRIEVAL_STRATEGY
+      type: string
+      value: 'single'
+    - name: SINGLE_RETRIEVAL_MODEL
+      type: string
+      value: 'gpt-3.5-turbo'
+    - name: MULTI_RETRIEVAL_MODEL
+      type: string
+      value: 'gpt-4'
+    - name: RERANK_ENABLED
+      type: string
+      value: 'false'
+    - name: CONTEXT_SIZE_LIMIT
+      type: number
+      value: 4096
+    - name: OUTPUT_MAX_TOKENS
+      type: number
+      value: 512
+    - name: TEMPERATURE_DEFAULT
+      type: number
+      value: 0.7
+    - name: TOP_P_DEFAULT
+      type: number
+      value: 1.0
+    - name: FREQUENCY_PENALTY
+      type: number
+      value: 0.0
+    - name: PRESENCE_PENALTY
+      type: number
+      value: 0.0
+    - name: SYSTEM_PROMPT_TEMPLATE
+      type: string
+      value: '你是智能助手，基于知识库回答。'
+    - name: USER_PROMPT_TEMPLATE
+      type: string
+      value: '用户问：{{query}}'
+    - name: ASSISTANT_ROLE_NAME
+      type: string
+      value: '客服助手'
+    - name: USER_ROLE_NAME
+      type: string
+      value: '用户'
+
+  # ======================================================================
+  # 【应用功能配置】（以下均保持原始设定，未做更改）
+  # ======================================================================
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        attachment_image_file_size_limit: 2
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        file_upload_limit: 50
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: '👋 你好！你可以向我了解以下关于 Dify 的内容：
+
+      - Dify 是什么，能做什么
+
+      - 适合哪些使用场景
+
+      - 定价与套餐方案
+
+      - 如何快速上手'
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+
+  # ======================================================================
+  # 【图结构】定义节点和边（核心部分）
+  # ======================================================================
+  graph:
+
+    # --------------------------------------------------------------------
+    # 【边列表】（共 3 条核心边，连接主流程）
+    # --------------------------------------------------------------------
+    edges:
+    - data:
+        sourceType: start
+        targetType: knowledge-retrieval
+      id: 1711528914102-1711528915811
+      source: '1711528914102'
+      sourceHandle: source
+      target: '1711528915811'
+      targetHandle: target
+      type: custom
+    - data:
+        sourceType: knowledge-retrieval
+        targetType: llm
+      id: 1711528915811-1711528917469
+      source: '1711528915811'
+      sourceHandle: source
+      target: '1711528917469'
+      targetHandle: target
+      type: custom
+    - data:
+        sourceType: llm
+        targetType: answer
+      id: 1711528917469-1711528919501
+      source: '1711528917469'
+      sourceHandle: source
+      target: '1711528919501'
+      targetHandle: target
+      type: custom
+
+    # --------------------------------------------------------------------
+    # 【节点列表】（包含核心节点、注释节点、备用代码节点）
+    # --------------------------------------------------------------------
+    nodes:
+
+    # ===================================================================
+    # 节点 1：开始节点（Start） - 工作流入口
+    # ===================================================================
+    - data:
+        desc: 用户的提问从这里进入，作为整个流程的起点。
+        selected: false
+        title: 开始
+        type: start
+        variables: []
+      height: 117
+      id: '1711528914102'
+      position:
+        x: -208.69396666694146
+        y: 2613.5
+      positionAbsolute:
+        x: -208.69396666694146
+        y: 2613.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ===================================================================
+    # 节点 2：知识检索节点（Knowledge Retrieval）
+    # 关联两个知识库，使用单路检索模式。
+    # ===================================================================
+    - data:
+        dataset_ids:
+        - DaieoxqlOCSSOQo3S8MnAIdgoGH4D5cvfHx9pRofseS/LZ3f3S1X9qiPiUmER4v4
+        - 6BlM+/TN7llB8x+aJgVIIKdyY7y9roopEdW7MhYrZgMkhsc6GnqLr7y4IU13qs6n
+        desc: 在知识库中搜索与用户问题最相关的内容，并将结果传递给 LLM。
+        query_attachment_selector: []
+        query_variable_selector:
+        - '1711528914102'
+        - sys.query
+        retrieval_mode: single
+        selected: false
+        single_retrieval_config:
+          model:
+            completion_params:
+              frequency_penalty: 0
+              max_tokens: 512
+              presence_penalty: 0
+              temperature: 0
+              top_p: 1
+            mode: chat
+            name: gpt-3.5-turbo
+            provider: openai
+        title: 🌟 知识检索
+        type: knowledge-retrieval
+      dragging: false
+      height: 134
+      id: '1711528915811'
+      position:
+        x: 146.86579840061586
+        y: 2634.5
+      positionAbsolute:
+        x: 146.86579840061586
+        y: 2634.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ===================================================================
+    # 节点 3：LLM 节点 - 生成回答
+    # 使用豆包模型，temperature=0.7，max_tokens=512。
+    # ===================================================================
+    - data:
+        context:
+          enabled: true
+          variable_selector:
+          - '1711528915811'
+          - result
+        desc: AI 基于检索到的知识库内容结合用户问题，生成清晰、有帮助的回答。
+        memory:
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 50
+        model:
+          completion_params:
+            max_tokens: 512
+            temperature: 0.7
+            top_p: 1
+          mode: chat
+          name: doubao-seed-2-0-code-preview-260215
+          provider: langgenius/volcengine/volcengine
+        prompt_template:
+        - id: 943448fa-b145-4ae7-a485-d77e4a2cc77b
+          role: system
+          text: '角色：你是一位知识渊博的智能助手。
+
+            任务：根据{{#context#}}，准确回答用户的问题。
+
+            回答规范：
+
+            - 使用与用户提问相同的语言作答。
+
+            - 如果参考内容中没有相关信息，请回复："这个问题我暂时没有把握，能否换个方式描述一下？"
+
+            - 保持回答简洁、实用。
+
+            - 不要在回复中出现"根据参考内容"或"资料显示"等表述。'
+        selected: false
+        title: LLM
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 132
+      id: '1711528917469'
+      position:
+        x: 519.9286766497827
+        y: 2634.5
+      positionAbsolute:
+        x: 519.9286766497827
+        y: 2634.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ===================================================================
+    # 节点 4：回答节点（Answer） - 将结果返回给用户
+    # ===================================================================
+    - data:
+        answer: '{{#1711528917469.text#}}'
+        desc: 将 AI 生成的最终回复展示给用户。
+        selected: false
+        title: Answer
+        type: answer
+        variables: []
+      height: 131
+      id: '1711528919501'
+      position:
+        x: 843.6005502634025
+        y: 2634.5
+      positionAbsolute:
+        x: 843.6005502634025
+        y: 2634.5
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ===================================================================
+    # 节点 5：注释 - 工作流简介（黄色）
+    # ===================================================================
+    - data:
+        author: Anne
+        desc: ''
+        height: 207
+        selected: false
+        showAuthor: false
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 16px;","text":"👋 基于知识库的智能客服","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 16px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"这是一个基础的 RAG（检索增强生成）对话流。它会先搜索你自己的知识库，找到相关内容，再让 LLM 根据这些内容生成准确的回答。此架构是目前构建企业级知识问答系统的最优实践，能够有效缓解大模型的幻觉问题。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"🗂️ 随时换上你自己的文档、切换不同的模型，来体验一下效果吧！无论是产品手册、技术文档还是客服话术，都可以轻松接入。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"（提示：本工作流适用于7x24小时无人值守场景，显著降低人工成本。）","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 12px; color: #999;"}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: yellow
+        title: ''
+        type: ''
+        width: 596
+      height: 207
+      id: '1776409425757'
+      position:
+        x: -1061.7704851883886
+        y: 2578.5835012660527
+      positionAbsolute:
+        x: -1061.7704851883886
+        y: 2578.5835012660527
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 596
+
+    # ===================================================================
+    # 节点 6：注释 - 知识检索使用指南（蓝色）
+    # ===================================================================
+    - data:
+        author: Anne
+        desc: ''
+        height: 290
+        selected: false
+        showAuthor: false
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 16px;","text":"📖  知识检索","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"这个节点会在你的知识库中搜索与用户问题相关的内容，并将结果传递给 LLM，让它基于真实资料来回答问题。检索质量取决于知识库的分段策略和 embedding 模型的质量。","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 14px;","text":"如何连接知识库","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"1.点击该节点，在右侧面板找到「知识库」设置区。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"2.点击「+」，为这个对话流添加知识库。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"还没有知识库？没关系，这里有快速入门指南：","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"📖 ","type":"text","version":1},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"https://docs.dify.ai/zh/use-dify/knowledge/create-knowledge/introduction","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"link","version":1,"rel":"noreferrer","target":null,"title":null,"url":"https://docs.dify.ai/zh/use-dify/knowledge/create-knowledge/introduction"}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"（设计建议：建议将文档切分为 500-1000 字符的段落，以提高命中率。）","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 12px; color: #999;"}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: blue
+        title: ''
+        type: ''
+        width: 695
+      height: 290
+      id: '1776409658189'
+      position:
+        x: -65.67231926912211
+        y: 2235.0032347243387
+      positionAbsolute:
+        x: -65.67231926912211
+        y: 2235.0032347243387
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 695
+
+    # ===================================================================
+    # 节点 7：注释 - 后续扩展建议（绿色）
+    # ===================================================================
+    - data:
+        author: Anne
+        desc: ''
+        height: 208
+        selected: false
+        showAuthor: false
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 16px;","text":"接下来可以做什么","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"点击「预览」进行多轮测试，看看聊天机器人能否给出正确的回答。除此之外，你还可以：","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"添加 ","type":"text","version":1},{"detail":0,"format":1,"mode":"normal","style":"font-size: 14px;","text":"If/Else 节点","type":"text","version":1},{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"，快速处理与知识库无关的问题","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"listitem","version":1,"value":1},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"接入","type":"text","version":1},{"detail":0,"format":1,"mode":"normal","style":"font-size: 14px;","text":"更多知识库","type":"text","version":1},{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"，覆盖更广泛的问题范围","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"listitem","version":1,"value":2},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"根据你的使用场景，自定义 ","type":"text","version":1},{"detail":0,"format":1,"mode":"normal","style":"font-size: 14px;","text":"LLM 的系统提示词","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"listitem","version":1,"value":3}],"direction":null,"format":"","indent":0,"type":"list","version":1,"textStyle":"font-size: 14px;","listType":"bullet","start":1,"tag":"ul"}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: green
+        title: ''
+        type: ''
+        width: 566
+      height: 208
+      id: '1776409997347'
+      position:
+        x: 1521.656365566202
+        y: 2578.5835012660527
+      positionAbsolute:
+        x: 1521.656365566202
+        y: 2578.5835012660527
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 566
+
+    # ===================================================================
+    # 节点 8：注释 - 上下文配置重要提示（蓝色）
+    # ===================================================================
+    - data:
+        author: Anne
+        desc: ''
+        height: 302
+        selected: false
+        showAuthor: false
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 16px;","text":"重要提示：别忘了把知识库接入 LLM 节点","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"在匹配到对应内容前，我们需要确保 LLM 节点能正确读取知识库内容。请检查以下两个地方：","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"1.","type":"text","version":1},{"detail":0,"format":1,"mode":"normal","style":"font-size: 14px;","text":" 上下文字段","type":"text","version":1},{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":" — 点击 LLM 节点，在「上下文」中，将变量设置为知识检索 / (x) result Array[Object]。这一步是把知识库内容喂给 LLM。","type":"text","version":1},{"type":"linebreak","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"2. ","type":"text","version":1},{"detail":0,"format":1,"mode":"normal","style":"font-size: 14px;","text":"系统提示词","type":"text","version":1},{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":" — 确保 System 内，包含了上下文。","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"这两步缺一不可。不然，LLM 都无法读取你的知识库内容来回答问题。","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"（运维提醒：上下文变量是连接检索与生成的桥梁，务必检查变量选择器路径是否正确。）","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 12px; color: #999;"}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: blue
+        title: ''
+        type: ''
+        width: 641
+      height: 302
+      id: '1776410462798'
+      position:
+        x: 488.1746270220614
+        y: 2810.769138795594
+      positionAbsolute:
+        x: 488.1746270220614
+        y: 2810.769138795594
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 641
+
+    # ===================================================================
+    # 节点 9：备用注释 - 模型选型参考（紫色）
+    # ===================================================================
+    - data:
+        author: Admin
+        desc: ''
+        height: 250
+        selected: false
+        showAuthor: false
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 16px;","text":"🧠 模型选型参考","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"1. GPT-3.5-Turbo：成本低、速度快，适合通用问答。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"2. 豆包 (Doubao) 系列：火山引擎提供，中文场景性价比高。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"3. Claude 系列：擅长长文本和复杂推理，适合深度分析。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"4. 切换模型时，注意 API 密钥和模型名称的精确匹配。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: purple
+        title: ''
+        type: ''
+        width: 400
+      height: 250
+      id: 'note_extra_001'
+      position:
+        x: -1500
+        y: 2000
+      positionAbsolute:
+        x: -1500
+        y: 2000
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 400
+
+    # ===================================================================
+    # 节点 10：备用注释 - 常见问题排查（橙色）
+    # ===================================================================
+    - data:
+        author: Admin
+        desc: ''
+        height: 220
+        selected: false
+        showAuthor: false
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 16px;","text":"🔧 常见问题排查","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"- 现象：回答不相关。解决办法：检查知识库是否包含对应文档。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"- 现象：报错无权限。解决办法：检查 API 密钥是否过期。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"- 现象：回答过于简短。调节 LLM 的 max_tokens 参数。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: orange
+        title: ''
+        type: ''
+        width: 400
+      height: 220
+      id: 'note_extra_002'
+      position:
+        x: -1500
+        y: 2300
+      positionAbsolute:
+        x: -1500
+        y: 2300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 400
+
+    # ===================================================================
+    # 节点 11：备用注释 - 安全与合规（红色）
+    # ===================================================================
+    - data:
+        author: Admin
+        desc: ''
+        height: 200
+        selected: false
+        showAuthor: false
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 16px;","text":"🛡️ 安全与合规","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"确保知识库中不包含敏感个人信息（PII）。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"建议开启 Dify 的敏感词过滤功能（如需要）。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: red
+        title: ''
+        type: ''
+        width: 400
+      height: 200
+      id: 'note_extra_003'
+      position:
+        x: -1500
+        y: 2600
+      positionAbsolute:
+        x: -1500
+        y: 2600
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 400
+
+    # ===================================================================
+    # 节点 12：备用注释 - 性能优化建议（青色）
+    # ===================================================================
+    - data:
+        author: Admin
+        desc: ''
+        height: 230
+        selected: false
+        showAuthor: false
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 16px;","text":"⚡ 性能优化建议","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"1. 使用高性能 embedding 模型（如 text-embedding-3-small）。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"2. 合理设置知识库分段大小（建议 500-1000 字符）。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"3. 启用缓存机制（如 Redis）减少重复检索耗时。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: teal
+        title: ''
+        type: ''
+        width: 400
+      height: 230
+      id: 'note_extra_004'
+      position:
+        x: -1050
+        y: 2000
+      positionAbsolute:
+        x: -1050
+        y: 2000
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 400
+
+    # ===================================================================
+    # 节点 13：备用注释 - 版本更新日志（灰色）
+    # ===================================================================
+    - data:
+        author: Admin
+        desc: ''
+        height: 240
+        selected: false
+        showAuthor: false
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 16px;","text":"📅 版本更新记录","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"v0.6.0 (2026-06-17)：初始版本，基于 RAG 架构。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"v0.7.0 (计划)：增加多路召回和重排序功能。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"v0.8.0 (计划)：支持多模态输入（图片/文件）。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: gray
+        title: ''
+        type: ''
+        width: 400
+      height: 240
+      id: 'note_extra_005'
+      position:
+        x: -1050
+        y: 2300
+      positionAbsolute:
+        x: -1050
+        y: 2300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 400
+
+    # ===================================================================
+    # 节点 14：备用注释 - 团队协作须知（粉色）
+    # ===================================================================
+    - data:
+        author: Admin
+        desc: ''
+        height: 210
+        selected: false
+        showAuthor: false
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 16px;","text":"👥 团队协作须知","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"修改工作流前，请先在测试环境验证。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"部署到生产环境前，务必更新知识库索引。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: pink
+        title: ''
+        type: ''
+        width: 400
+      height: 210
+      id: 'note_extra_006'
+      position:
+        x: -1050
+        y: 2600
+      positionAbsolute:
+        x: -1050
+        y: 2600
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 400
+
+    # ===================================================================
+    # 节点 15：备用注释 - 外部资源引用（靛蓝）
+    # ===================================================================
+    - data:
+        author: Admin
+        desc: ''
+        height: 220
+        selected: false
+        showAuthor: false
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 16px;","text":"🔗 外部资源链接","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"Dify 官方文档：https://docs.dify.ai","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"火山引擎豆包模型页：https://www.volcengine.com","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: indigo
+        title: ''
+        type: ''
+        width: 400
+      height: 220
+      id: 'note_extra_007'
+      position:
+        x: -600
+        y: 2000
+      positionAbsolute:
+        x: -600
+        y: 2000
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 400
+
+    # ===================================================================
+    # 节点 16：备用注释 - 数据看板（翠绿）
+    # ===================================================================
+    - data:
+        author: Admin
+        desc: ''
+        height: 200
+        selected: false
+        showAuthor: false
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 16px;","text":"📊 运营数据看板","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"建议接入 Dify 的日志分析系统，监控用户提问 Top 10。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: green
+        title: ''
+        type: ''
+        width: 400
+      height: 200
+      id: 'note_extra_008'
+      position:
+        x: -600
+        y: 2300
+      positionAbsolute:
+        x: -600
+        y: 2300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 400
+
+    # ===================================================================
+    # 节点 17：备用注释 - 致谢（黄色）
+    # ===================================================================
+    - data:
+        author: Admin
+        desc: ''
+        height: 180
+        selected: false
+        showAuthor: false
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":1,"mode":"normal","style":"font-size: 16px;","text":"🙏 感谢使用","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":1,"textStyle":"font-size: 16px;"},{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textStyle":"font-size: 14px;","textFormat":0},{"children":[{"detail":0,"format":0,"mode":"normal","style":"font-size: 14px;","text":"如有任何问题，请联系 Dify 技术支持团队。","type":"text","version":1}],"direction":null,"format":"start","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":"font-size: 14px;"}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: yellow
+        title: ''
+        type: ''
+        width: 400
+      height: 180
+      id: 'note_extra_009'
+      position:
+        x: -600
+        y: 2600
+      positionAbsolute:
+        x: -600
+        y: 2600
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 400
+
+    # ===================================================================
+    # 节点 18：备用代码节点 - 数据清洗（未接入主流程）
+    # ===================================================================
+    - data:
+        code: |
+          # 示例代码：用于清洗用户输入（备用）
+          def sanitize_input(text):
+              # 移除多余空格和特殊字符
+              cleaned = text.strip()
+              # 可扩展其他清洗逻辑
+              return cleaned
+        desc: 备用数据清洗功能，暂未启用。
+        title: 数据清洗模块
+        type: code
+        variables: []
+      height: 120
+      id: 'dummy_code_001'
+      position:
+        x: 9999
+        y: 9999
+      positionAbsolute:
+        x: 9999
+        y: 9999
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ===================================================================
+    # 节点 19：备用代码节点 - 日志记录（未接入主流程）
+    # ===================================================================
+    - data:
+        code: |
+          # 示例代码：用于记录问答日志（备用）
+          def log_query(user_id, query, answer):
+              import datetime
+              timestamp = datetime.datetime.now().isoformat()
+              with open('/var/log/chat.log', 'a') as f:
+                  f.write(f"{timestamp} | {user_id} | {query} | {answer[:50]}\n")
+        desc: 备用日志记录功能，暂未启用。
+        title: 日志记录模块
+        type: code
+        variables: []
+      height: 120
+      id: 'dummy_code_002'
+      position:
+        x: 10200
+        y: 9999
+      positionAbsolute:
+        x: 10200
+        y: 9999
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ===================================================================
+    # 节点 20：备用代码节点 - 格式化输出（未接入主流程）
+    # ===================================================================
+    - data:
+        code: |
+          # 示例代码：用于格式化最终回答（备用）
+          def format_answer(answer, format_type='markdown'):
+              if format_type == 'markdown':
+                  return f"**回答：**\n\n{answer}"
+              elif format_type == 'plain':
+                  return answer
+              else:
+                  return answer
+        desc: 备用格式化功能，暂未启用。
+        title: 格式化模块
+        type: code
+        variables: []
+      height: 120
+      id: 'dummy_code_003'
+      position:
+        x: 10400
+        y: 9999
+      positionAbsolute:
+        x: 10400
+        y: 9999
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ===================================================================
+    # 【视口配置】画布显示区域
+    # ===================================================================
+    viewport:
+      x: 275.17142881345774
+      y: -2399.3126283688607
+      zoom: 1.0011988166119485
+
+  # ======================================================================
+  # 【RAG 管道变量】（保持默认）
+  # ======================================================================
+  rag_pipeline_variables: []
